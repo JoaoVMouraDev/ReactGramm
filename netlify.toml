@@ -2,12 +2,14 @@
   command = "pnpm config set only-allow-build-scripts false && pnpm install --no-frozen-lockfile && pnpm run build"
   publish = "dist/public"
 
+# 1. ENVIAR REQUISIÇÕES DE API PARA O RENDER
 [[redirects]]
   from = "/api/*"
-  to = "https://sua-api-no-render-ou-railway.com/api/:splat"
+  to = "https://seu-projeto-backend.onrender.com/api/:splat"
   status = 200
   force = true
 
+# 2. REDIRECIONAMENTO DO REACT ROUTER
 [[redirects]]
   from = "/*"
   to = "/index.html"
