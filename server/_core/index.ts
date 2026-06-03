@@ -60,16 +60,25 @@ async function startServer() {
     serveStatic(app);
   }
 
+  // --- CONFIGURAÇÃO DA PORTA ADAPTADA PARA O RENDER ---
   const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  const isProd = process.env.NODE_ENV === "production";
 
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+  if (isProd) {
+    // Em produção (Render), escuta diretamente na porta designada e aceita conexões externas (0.0.0.0)
+    server.listen(preferredPort, "0.0.0.0", () => {
+      console.log(`Server running in production mode on port ${preferredPort}`);
+    });
+  } else {
+    // Em desenvolvimento local, mantém a busca de portas livres se a 3000 estiver ocupada
+    const port = await findAvailablePort(preferredPort);
+    if (port !== preferredPort) {
+      console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+    }
+    server.listen(port, () => {
+      console.log(`Server running on http://localhost:${port}/`);
+    });
   }
-
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
-  });
 }
 
 startServer().catch(console.error);
