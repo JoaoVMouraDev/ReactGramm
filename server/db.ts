@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   Comment,
   Follow,
@@ -29,13 +30,100 @@ export async function getDb() {
       return null;
     }
     try {
-      _db = drizzle(connectionString);
+      _db = drizzle(postgres(connectionString, { max: 5 }));
     } catch (error) {
       console.error("[Database] Failed to connect:", error);
       _db = null;
     }
   }
   return _db;
+}
+
+export async function ensureDatabaseSchema(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      CREATE TYPE role AS ENUM ('user', 'admin');
+    EXCEPTION
+      WHEN duplicate_object THEN null;
+    END $$;
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id serial PRIMARY KEY,
+      "openId" varchar(64) UNIQUE,
+      name text,
+      email varchar(320) UNIQUE,
+      "passwordHash" text,
+      "loginMethod" varchar(64),
+      "googleId" varchar(255) UNIQUE,
+      "githubId" varchar(255) UNIQUE,
+      role role NOT NULL DEFAULT 'user',
+      username varchar(64) UNIQUE,
+      bio text,
+      "avatarUrl" text,
+      "avatarKey" text,
+      "emailVerified" timestamp,
+      "createdAt" timestamp NOT NULL DEFAULT now(),
+      "updatedAt" timestamp NOT NULL DEFAULT now(),
+      "lastSignedIn" timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS posts (
+      id serial PRIMARY KEY,
+      "userId" integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "imageUrl" text NOT NULL,
+      "imageKey" text NOT NULL,
+      caption text,
+      hashtags text,
+      "createdAt" timestamp NOT NULL DEFAULT now(),
+      "updatedAt" timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS likes (
+      id serial PRIMARY KEY,
+      "postId" integer NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      "userId" integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "createdAt" timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS comments (
+      id serial PRIMARY KEY,
+      "postId" integer NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      "userId" integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      text text NOT NULL,
+      "createdAt" timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS follows (
+      id serial PRIMARY KEY,
+      "followerId" integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "followingId" integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "createdAt" timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "posts_userId_idx" ON posts ("userId");`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "likes_postId_userId_unique" ON likes ("postId", "userId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "likes_postId_idx" ON likes ("postId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "likes_userId_idx" ON likes ("userId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_postId_idx" ON comments ("postId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_userId_idx" ON comments ("userId");`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "follows_follower_following_unique" ON follows ("followerId", "followingId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "follows_followerId_idx" ON follows ("followerId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "follows_followingId_idx" ON follows ("followingId");`);
 }
 
 // ─── Shared Selects ──────────────────────────────────────────────────────────
@@ -97,7 +185,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   // If for some reason we have an empty update, we still want to touch the record
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = now;
 
-  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+  await db
+    .insert(users)
+    .values(values)
+    .onConflictDoUpdate({ target: users.openId, set: updateSet });
 }
 
 export async function getUserByOpenId(openId: string): Promise<User | undefined> {
@@ -265,8 +356,8 @@ export async function searchUsers(query: string, limit = 10): Promise<User[]> {
 export async function createPost(data: InsertPost): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
-  const result = await db.insert(posts).values(data);
-  return Number(result[0].insertId);
+  const [created] = await db.insert(posts).values(data).returning({ id: posts.id });
+  return created.id;
 }
 
 export async function deletePost(postId: number, userId: number): Promise<void> {
@@ -296,8 +387,8 @@ export async function getFeedPosts(
       imageKey: posts.imageKey,
       caption: posts.caption,
       hashtags: posts.hashtags,
-      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS UNSIGNED)`,
-      commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS UNSIGNED)`,
+      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
+      commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
       updatedAt: posts.updatedAt,
       user: USER_SELECT,
@@ -325,8 +416,8 @@ export async function getUserPosts(
       imageKey: posts.imageKey,
       caption: posts.caption,
       hashtags: posts.hashtags,
-      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS UNSIGNED)`,
-      commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS UNSIGNED)`,
+      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
+      commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
       updatedAt: posts.updatedAt,
     })
@@ -353,8 +444,8 @@ export async function getPostsByHashtag(
       imageKey: posts.imageKey,
       caption: posts.caption,
       hashtags: posts.hashtags,
-      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS UNSIGNED)`,
-      commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS UNSIGNED)`,
+      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
+      commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
       updatedAt: posts.updatedAt,
       user: USER_SELECT,
@@ -415,8 +506,11 @@ export async function getUserLikedPostIds(
 export async function createComment(data: InsertComment): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
-  const result = await db.insert(comments).values(data);
-  return Number(result[0].insertId);
+  const [created] = await db
+    .insert(comments)
+    .values(data)
+    .returning({ id: comments.id });
+  return created.id;
 }
 
 export async function getCommentsByPost(

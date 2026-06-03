@@ -1,16 +1,19 @@
 import {
-  int,
-  mysqlEnum,
-  mysqlTable,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  serial,
   text,
   timestamp,
-  varchar,
-  index,
   uniqueIndex,
-} from "drizzle-orm/mysql-core";
+  varchar,
+} from "drizzle-orm/pg-core";
 
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
+export const userRole = pgEnum("role", ["user", "admin"]);
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   openId: varchar("openId", { length: 64 }).unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }).unique(),
@@ -18,25 +21,25 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   googleId: varchar("googleId", { length: 255 }).unique(),
   githubId: varchar("githubId", { length: 255 }).unique(),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: userRole("role").default("user").notNull(),
   username: varchar("username", { length: 64 }).unique(),
   bio: text("bio"),
   avatarUrl: text("avatarUrl"),
   avatarKey: text("avatarKey"),
   emailVerified: timestamp("emailVerified"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-export const posts = mysqlTable(
+export const posts = pgTable(
   "posts",
   {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId")
+    id: serial("id").primaryKey(),
+    userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     imageUrl: text("imageUrl").notNull(),
@@ -44,7 +47,7 @@ export const posts = mysqlTable(
     caption: text("caption"),
     hashtags: text("hashtags"), // JSON array stored as string
     createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },
   (table) => [index("posts_userId_idx").on(table.userId)]
 );
@@ -52,14 +55,14 @@ export const posts = mysqlTable(
 export type Post = typeof posts.$inferSelect;
 export type InsertPost = typeof posts.$inferInsert;
 
-export const likes = mysqlTable(
+export const likes = pgTable(
   "likes",
   {
-    id: int("id").autoincrement().primaryKey(),
-    postId: int("postId")
+    id: serial("id").primaryKey(),
+    postId: integer("postId")
       .notNull()
       .references(() => posts.id, { onDelete: "cascade" }),
-    userId: int("userId")
+    userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -74,14 +77,14 @@ export const likes = mysqlTable(
 export type Like = typeof likes.$inferSelect;
 export type InsertLike = typeof likes.$inferInsert;
 
-export const comments = mysqlTable(
+export const comments = pgTable(
   "comments",
   {
-    id: int("id").autoincrement().primaryKey(),
-    postId: int("postId")
+    id: serial("id").primaryKey(),
+    postId: integer("postId")
       .notNull()
       .references(() => posts.id, { onDelete: "cascade" }),
-    userId: int("userId")
+    userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     text: text("text").notNull(),
@@ -96,14 +99,14 @@ export const comments = mysqlTable(
 export type Comment = typeof comments.$inferSelect;
 export type InsertComment = typeof comments.$inferInsert;
 
-export const follows = mysqlTable(
+export const follows = pgTable(
   "follows",
   {
-    id: int("id").autoincrement().primaryKey(),
-    followerId: int("followerId")
+    id: serial("id").primaryKey(),
+    followerId: integer("followerId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    followingId: int("followingId")
+    followingId: integer("followingId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
