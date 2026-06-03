@@ -1,8 +1,7 @@
 [build]
-  command = "npm install --legacy-peer-deps && npm run build"
+  command = "pnpm install --no-frozen-lockfile && pnpm run build"
   publish = "dist"
 
-# Redirecionamento para garantir que o React Router funcione corretamente
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -10,3 +9,5 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
+  PNPM_FLAGS = "--no-frozen-lockfile"
