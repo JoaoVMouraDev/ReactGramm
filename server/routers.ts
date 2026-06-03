@@ -22,15 +22,21 @@ import {
   getCommentsByPost,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies.ts";       
-import { systemRouter } from "./_core/systemRouter.ts";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc.ts";
+import { systemRouter } from "./_core/systemRouter.js";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { hashPassword, verifyPassword, validatePasswordStrength, validateEmail, validateUsername } from "./auth.ts"; 
 import { users } from "../drizzle/schema.ts";                      
 import { eq } from "drizzle-orm";
 import { getDb, getUserByEmail, getUserByUsername as getUserByUsernameDb, createUserWithEmail } from "./db.ts";
-import { sdk } from "./_core/sdk.ts";                               
+import { sdk } from "./_core/sdk.ts";                                
+// IMPORTANTE: Ajuste o caminho abaixo para onde sua função de upload realmente está
+import { storagePut } from "./storage.ts"; 
+
+// Constantes necessárias para a sessão
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+const COOKIE_NAME = "session"; 
 
 // ─── Upload Router ─────────────────────────────────────────────────────────────
 
@@ -486,7 +492,7 @@ export const appRouter = router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      (ctx.res as any).clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
     signup: authRouter.signup,
