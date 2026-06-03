@@ -21,18 +21,16 @@ import {
   updateUserProfile,
   getCommentsByPost,
 } from "./db";
-import { storagePut } from "./storage";
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { getSessionCookieOptions } from "./_core/cookies.ts";       
+import { systemRouter } from "./_core/systemRouter.ts";             
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc.ts"; 
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
-import { hashPassword, verifyPassword, validatePasswordStrength, validateEmail, validateUsername } from "./auth";
-import { users } from "../drizzle/schema";
+import { hashPassword, verifyPassword, validatePasswordStrength, validateEmail, validateUsername } from "./auth.ts"; 
+import { users } from "../drizzle/schema.ts";                      
 import { eq } from "drizzle-orm";
-import { getDb, getUserByEmail, getUserByUsername as getUserByUsernameDb, createUserWithEmail } from "./db";
-import { sdk } from "./_core/sdk";
+import { getDb, getUserByEmail, getUserByUsername as getUserByUsernameDb, createUserWithEmail } from "./db.ts";
+import { sdk } from "./_core/sdk.ts";                               
 
 // ─── Upload Router ─────────────────────────────────────────────────────────────
 
