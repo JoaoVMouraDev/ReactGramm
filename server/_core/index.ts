@@ -14,11 +14,11 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth.ts";          
-import { registerStorageProxy } from "./storageProxy.ts";  
-import { appRouter } from "../routers.ts";                  
-import { createContext } from "./context.ts";              
-import { serveStatic, setupVite } from "./vite.ts";        
+import { registerOAuthRoutes } from "./oauth";     
+import { registerStorageProxy } from "./storageProxy";
+import { appRouter } from "../routers";            
+import { createContext } from "./context";   
+import { serveStatic, setupVite } from "./vite";
 
 
 function isPortAvailable(port: number): Promise<boolean> {
