@@ -1,8 +1,8 @@
 [build]
-  command = "pnpm config set only-allow-build-scripts true && pnpm install --no-frozen-lockfile && pnpm run build"
-  publish = "dist"
+  command = "pnpm config set only-allow-build-scripts false && pnpm install --no-frozen-lockfile && pnpm run build"
+  publish = "dist/public"
 
-
+# Redirecionamento para garantir que o React Router funcione corretamente
 [[redirects]]
   from = "/*"
   to = "/index.html"
