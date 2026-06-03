@@ -22,8 +22,8 @@ import {
   getCommentsByPost,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies.ts";       
-import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { systemRouter } from "./_core/systemRouter.js";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { hashPassword, verifyPassword, validatePasswordStrength, validateEmail, validateUsername } from "./auth.ts"; 
