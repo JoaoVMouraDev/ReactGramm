@@ -1,6 +1,7 @@
 [build]
-  command = "pnpm install --no-frozen-lockfile && pnpm run build"
+  command = "pnpm config set only-allow-build-scripts true && pnpm install --no-frozen-lockfile && pnpm run build"
   publish = "dist"
+
 
 [[redirects]]
   from = "/*"
@@ -9,5 +10,6 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  NODE_ENV = "production"
   NPM_FLAGS = "--legacy-peer-deps"
   PNPM_FLAGS = "--no-frozen-lockfile"
