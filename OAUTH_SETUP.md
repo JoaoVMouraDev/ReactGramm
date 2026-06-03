@@ -25,7 +25,7 @@ GITHUB_CLIENT_SECRET=seu_github_client_secret
 5. Tipo de aplicação: **Web application**
 6. Em **Authorized redirect URIs**, adicione:
    - `http://localhost:5173/api/auth/google/callback` (dev)
-   - `https://seudominio.com/api/auth/google/callback` (prod)
+   - `https://reactgramm.netlify.app/api/auth/google/callback` (prod)
 7. Copie o **Client ID** e **Client Secret**
 
 ---
@@ -35,8 +35,8 @@ GITHUB_CLIENT_SECRET=seu_github_client_secret
 1. Acesse [github.com/settings/applications/new](https://github.com/settings/applications/new)
 2. Preencha:
    - **Application name**: ReactGram
-   - **Homepage URL**: `http://localhost:5173`
-   - **Authorization callback URL**: `http://localhost:5173/api/auth/github/callback`
+   - **Homepage URL**: `https://reactgramm.netlify.app`
+   - **Authorization callback URL**: `https://reactgramm.netlify.app/api/auth/github/callback`
 3. Clique em **Register application**
 4. Copie o **Client ID** e gere um **Client Secret**
 
