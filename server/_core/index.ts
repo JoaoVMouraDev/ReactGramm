@@ -1,3 +1,14 @@
+process.on("uncaughtException", (err) => {
+  console.error("❌ CRASH DETECTADO NA INICIALIZAÇÃO:");
+  console.error(err.stack || err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ REJEIÇÃO NÃO TRATADA EM:", promise);
+  console.error("Razão:", reason);
+});
+
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
