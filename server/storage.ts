@@ -47,6 +47,11 @@ export async function storagePut(
   const key = appendHashSuffix(normalizeKey(relKey));
 
   if (isLocal) {
+    if (ENV.isProduction) {
+      const encoded = Buffer.from(data as any).toString("base64");
+      return { key, url: `data:${contentType};base64,${encoded}` };
+    }
+
     const storageDir = path.resolve(
       process.cwd(),
       "client",
