@@ -20,6 +20,7 @@ import {
   toggleLike,
   updateUserProfile,
   getCommentsByPost,
+  getNotificationsForUser,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies.ts";       
 import { systemRouter } from "./_core/systemRouter";
@@ -337,6 +338,14 @@ const followsRouter = router({
 
 // ─── Users Router ──────────────────────────────────────────────────────────────
 
+const notificationsRouter = router({
+  list: protectedProcedure
+    .input(z.object({ limit: z.number().min(1).max(50).default(20) }))
+    .query(async ({ input, ctx }) => {
+      return getNotificationsForUser(ctx.user.id, input.limit);
+    }),
+});
+
 const usersRouter = router({
   getProfile: publicProcedure
     .input(z.object({ username: z.string() }))
@@ -503,6 +512,7 @@ export const appRouter = router({
   likes: likesRouter,
   comments: commentsRouter,
   follows: followsRouter,
+  notifications: notificationsRouter,
   users: usersRouter,
 });
 

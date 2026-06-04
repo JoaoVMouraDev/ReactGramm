@@ -534,6 +534,110 @@ export async function getCommentsByPost(
   return result as (Comment & { user: User })[];
 }
 
+export type AppNotification = {
+  id: string;
+  type: "follow" | "like" | "comment";
+  actor: Pick<User, "id" | "username" | "name" | "avatarUrl">;
+  postId: number | null;
+  text: string | null;
+  createdAt: Date;
+};
+
+export async function getNotificationsForUser(
+  userId: number,
+  limit = 20
+): Promise<AppNotification[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const [followEvents, likeEvents, commentEvents] = await Promise.all([
+    db
+      .select({
+        id: follows.id,
+        createdAt: follows.createdAt,
+        actor: {
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatarUrl: users.avatarUrl,
+        },
+      })
+      .from(follows)
+      .innerJoin(users, eq(follows.followerId, users.id))
+      .where(and(eq(follows.followingId, userId), sql`${follows.followerId} <> ${userId}`))
+      .orderBy(desc(follows.createdAt))
+      .limit(limit),
+
+    db
+      .select({
+        id: likes.id,
+        postId: likes.postId,
+        createdAt: likes.createdAt,
+        actor: {
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatarUrl: users.avatarUrl,
+        },
+      })
+      .from(likes)
+      .innerJoin(posts, eq(likes.postId, posts.id))
+      .innerJoin(users, eq(likes.userId, users.id))
+      .where(and(eq(posts.userId, userId), sql`${likes.userId} <> ${userId}`))
+      .orderBy(desc(likes.createdAt))
+      .limit(limit),
+
+    db
+      .select({
+        id: comments.id,
+        postId: comments.postId,
+        text: comments.text,
+        createdAt: comments.createdAt,
+        actor: {
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatarUrl: users.avatarUrl,
+        },
+      })
+      .from(comments)
+      .innerJoin(posts, eq(comments.postId, posts.id))
+      .innerJoin(users, eq(comments.userId, users.id))
+      .where(and(eq(posts.userId, userId), sql`${comments.userId} <> ${userId}`))
+      .orderBy(desc(comments.createdAt))
+      .limit(limit),
+  ]);
+
+  return [
+    ...followEvents.map((event) => ({
+      id: `follow-${event.id}`,
+      type: "follow" as const,
+      actor: event.actor,
+      postId: null,
+      text: null,
+      createdAt: event.createdAt,
+    })),
+    ...likeEvents.map((event) => ({
+      id: `like-${event.id}`,
+      type: "like" as const,
+      actor: event.actor,
+      postId: event.postId,
+      text: null,
+      createdAt: event.createdAt,
+    })),
+    ...commentEvents.map((event) => ({
+      id: `comment-${event.id}`,
+      type: "comment" as const,
+      actor: event.actor,
+      postId: event.postId,
+      text: event.text,
+      createdAt: event.createdAt,
+    })),
+  ]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, limit);
+}
+
 export async function toggleFollow(
   followerId: number,
   followingId: number

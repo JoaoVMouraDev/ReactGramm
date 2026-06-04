@@ -18,8 +18,27 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
+
+function formatNotificationTime(value: Date | string) {
+  const createdAt = value instanceof Date ? value : new Date(value);
+  const diffMs = Date.now() - createdAt.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 1) return "agora";
+  if (diffMinutes < 60) return `${diffMinutes} min`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} h`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} d`;
+
+  return createdAt.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
 
 export function Navbar() {
   const [, navigate] = useLocation();
@@ -33,31 +52,16 @@ export function Navbar() {
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const sampleNotifications = [
-    {
-      icon: UserPlus,
-      title: "Novo seguidor",
-      text: "carlos992 começou a seguir você",
-      time: "agora",
-    },
-    {
-      icon: Heart,
-      title: "Nova curtida",
-      text: "luis123 curtiu sua foto",
-      time: "2 min",
-    },
-    {
-      icon: MessageCircle,
-      title: "Novo comentário",
-      text: "ana comentou na sua foto",
-      time: "5 min",
-    },
-  ];
-
   const { data: searchResults } = trpc.users.search.useQuery(
     { query: searchQuery, limit: 8 },
-    { enabled: searchQuery.length >= 1 }
+    { enabled: searchQuery.length >= 1 },
   );
+
+  const { data: notifications = [], isLoading: notificationsLoading } =
+    trpc.notifications.list.useQuery(
+      { limit: 20 },
+      { enabled: Boolean(user), refetchInterval: 15000 },
+    );
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -74,6 +78,7 @@ export function Navbar() {
         setShowUserMenu(false);
       }
     };
+
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
@@ -81,7 +86,6 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 bg-card/95 backdrop-blur border-b border-border">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-        {/* Logo */}
         <button
           onClick={() => navigate("/")}
           className="font-bold text-xl tracking-tight ig-gradient-text shrink-0"
@@ -89,7 +93,6 @@ export function Navbar() {
           ReactGram
         </button>
 
-        {/* Search */}
         <div ref={searchRef} className="relative flex-1 max-w-xs hidden sm:block">
           <div className="relative">
             <Search
@@ -108,6 +111,7 @@ export function Navbar() {
               className="w-full pl-9 pr-4 py-2 text-sm bg-muted rounded-full border-0 outline-none focus:ring-2 focus:ring-primary/30 transition-all"
             />
           </div>
+
           {showSearch && searchQuery.length >= 1 && (
             <div className="absolute top-full mt-2 w-full bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-fade-in z-50">
               {!searchResults || searchResults.length === 0 ? (
@@ -115,30 +119,34 @@ export function Navbar() {
                   Nenhum resultado
                 </p>
               ) : (
-                searchResults.map((u) => (
+                searchResults.map((result) => (
                   <button
-                    key={u.id}
+                    key={result.id}
                     onClick={() => {
-                      navigate(`/profile/${u.username}`);
+                      navigate(`/profile/${result.username ?? result.id}`);
                       setShowSearch(false);
                       setSearchQuery("");
                     }}
                     className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted transition-colors text-left"
                   >
-                    <div className="w-9 h-9 rounded-full ig-gradient flex items-center justify-center text-white text-xs font-bold shrink-0">
-                      {u.avatarUrl ? (
+                    <div className="w-9 h-9 rounded-full ig-gradient flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+                      {result.avatarUrl ? (
                         <img
-                          src={u.avatarUrl}
-                          alt={u.username ?? ""}
-                          className="w-full h-full rounded-full object-cover"
+                          src={result.avatarUrl}
+                          alt={result.username ?? ""}
+                          className="w-full h-full object-cover"
                         />
                       ) : (
-                        (u.username ?? u.name ?? "?")[0]?.toUpperCase()
+                        (result.username ?? result.name ?? "?")[0]?.toUpperCase()
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-sm truncate">{u.username}</p>
-                      <p className="text-xs text-muted-foreground truncate">{u.name}</p>
+                      <p className="font-semibold text-sm truncate">
+                        {result.username}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {result.name}
+                      </p>
                     </div>
                   </button>
                 ))
@@ -147,7 +155,6 @@ export function Navbar() {
           )}
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => navigate("/")}
@@ -179,6 +186,7 @@ export function Navbar() {
           >
             {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
+
           {user && (
             <div ref={notificationsRef} className="relative">
               <button
@@ -187,9 +195,11 @@ export function Navbar() {
                 title="Notificações"
               >
                 <Bell size={20} />
-                <span className="absolute right-1.5 top-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-4 text-center">
-                  {sampleNotifications.length}
-                </span>
+                {notifications.length > 0 && (
+                  <span className="absolute right-1.5 top-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-4 text-center">
+                    {notifications.length > 9 ? "9+" : notifications.length}
+                  </span>
+                )}
               </button>
 
               {showNotifications && (
@@ -197,42 +207,85 @@ export function Navbar() {
                   <div className="px-4 py-3 border-b border-border">
                     <p className="text-sm font-semibold">Notificações</p>
                     <p className="text-xs text-muted-foreground">
-                      Exemplos: seguidores, curtidas e comentários
+                      Atividades recentes no seu perfil
                     </p>
                   </div>
 
                   <div className="divide-y divide-border">
-                    {sampleNotifications.map((notification) => {
-                      const Icon = notification.icon;
+                    {notificationsLoading ? (
+                      <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                        Carregando...
+                      </p>
+                    ) : notifications.length === 0 ? (
+                      <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                        Nenhuma notificação ainda
+                      </p>
+                    ) : (
+                      notifications.map((notification) => {
+                        const Icon =
+                          notification.type === "follow"
+                            ? UserPlus
+                            : notification.type === "like"
+                              ? Heart
+                              : MessageCircle;
+                        const actorName =
+                          notification.actor.username ??
+                          notification.actor.name ??
+                          "usuário";
+                        const actorPath =
+                          notification.actor.username ?? notification.actor.id;
+                        const title =
+                          notification.type === "follow"
+                            ? "Novo seguidor"
+                            : notification.type === "like"
+                              ? "Nova curtida"
+                              : "Novo comentário";
+                        const text =
+                          notification.type === "follow"
+                            ? `${actorName} começou a seguir você`
+                            : notification.type === "like"
+                              ? `${actorName} curtiu sua foto`
+                              : `${actorName} comentou na sua foto`;
+                        const target =
+                          notification.type === "follow"
+                            ? `/profile/${actorPath}`
+                            : notification.postId
+                              ? `/post/${notification.postId}`
+                              : `/profile/${actorPath}`;
 
-                      return (
-                        <button
-                          key={notification.title}
-                          onClick={() => setShowNotifications(false)}
-                          className="w-full px-4 py-3 flex items-start gap-3 hover:bg-muted transition-colors text-left"
-                        >
-                          <span className="mt-0.5 w-9 h-9 rounded-full ig-gradient text-white flex items-center justify-center shrink-0">
-                            <Icon size={17} />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-semibold">
-                              {notification.title}
+                        return (
+                          <button
+                            key={notification.id}
+                            onClick={() => {
+                              navigate(target);
+                              setShowNotifications(false);
+                            }}
+                            className="w-full px-4 py-3 flex items-start gap-3 hover:bg-muted transition-colors text-left"
+                          >
+                            <span className="mt-0.5 w-9 h-9 rounded-full ig-gradient text-white flex items-center justify-center shrink-0">
+                              <Icon size={17} />
                             </span>
-                            <span className="block text-xs text-muted-foreground">
-                              {notification.text}
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-semibold">
+                                {title}
+                              </span>
+                              <span className="block text-xs text-muted-foreground">
+                                {text}
+                              </span>
                             </span>
-                          </span>
-                          <span className="text-[11px] text-muted-foreground shrink-0">
-                            {notification.time}
-                          </span>
-                        </button>
-                      );
-                    })}
+                            <span className="text-[11px] text-muted-foreground shrink-0">
+                              {formatNotificationTime(notification.createdAt)}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               )}
             </div>
           )}
+
           {user ? (
             <div ref={userMenuRef} className="relative">
               <button
@@ -255,6 +308,7 @@ export function Navbar() {
                   </div>
                 </div>
               </button>
+
               {showUserMenu && (
                 <div className="absolute right-0 top-full mt-2 w-52 bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-fade-in z-50">
                   <button
@@ -265,7 +319,7 @@ export function Navbar() {
                     className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted transition-colors text-left border-b border-border"
                   >
                     <User size={16} className="text-muted-foreground" />
-                    <span className="text-sm font-medium">Meu Perfil</span>
+                    <span className="text-sm font-medium">Meu perfil</span>
                   </button>
                   <button
                     onClick={() => {
@@ -295,7 +349,6 @@ export function Navbar() {
   );
 }
 
-/* Mobile bottom nav */
 export function MobileNav() {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
@@ -303,9 +356,15 @@ export function MobileNav() {
   const items = [
     { icon: Home, path: "/", label: "Início" },
     { icon: Search, path: "/explore", label: "Explorar" },
-    ...(user ? [{ icon: PlusSquare, path: "/upload", label: "Novo Post" }] : []),
+    ...(user ? [{ icon: PlusSquare, path: "/upload", label: "Novo post" }] : []),
     ...(user
-      ? [{ icon: User, path: `/profile/${user.username ?? user.id}`, label: "Perfil" }]
+      ? [
+          {
+            icon: User,
+            path: `/profile/${user.username ?? user.id}`,
+            label: "Perfil",
+          },
+        ]
       : []),
   ];
 
@@ -321,6 +380,7 @@ export function MobileNav() {
               className={`flex flex-col items-center justify-center gap-0.5 p-2 rounded-lg transition-colors ${
                 isActive ? "text-primary" : "text-muted-foreground"
               }`}
+              title={item.label}
             >
               <item.icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
             </button>

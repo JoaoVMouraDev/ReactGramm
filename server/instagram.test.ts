@@ -76,6 +76,7 @@ vi.mock("./db", () => ({
   getLikesByPost: vi.fn(async () => []),
   createComment: vi.fn(async () => 99),
   getCommentsByPost: vi.fn(async () => []),
+  getNotificationsForUser: vi.fn(async () => []),
   toggleFollow: vi.fn(async () => ({ following: true })),
   isFollowing: vi.fn(async () => false),
   getFollowersCount: vi.fn(async () => 5),
