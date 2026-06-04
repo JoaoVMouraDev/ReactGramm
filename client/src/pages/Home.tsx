@@ -14,6 +14,7 @@ export default function Home() {
   const [, navigate] = useLocation();
   const [offset, setOffset] = useState(0);
   const [inView, setInView] = useState(false);
+  const [storyAvatarFailed, setStoryAvatarFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // Hook para observar o scroll e disparar o carregamento automático
@@ -40,6 +41,10 @@ export default function Home() {
       navigate("/login");
     }
   }, [isAuthenticated, loading, navigate]);
+
+  useEffect(() => {
+    setStoryAvatarFailed(false);
+  }, [user?.avatarUrl]);
 
   const {
     data,
@@ -90,8 +95,13 @@ export default function Home() {
               <div className="flex flex-col items-center gap-1.5 shrink-0">
                 <div className="w-16 h-16 rounded-full ig-gradient p-0.5 cursor-pointer hover:opacity-90 transition-opacity">
                   <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
-                    {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                    {user.avatarUrl && !storyAvatarFailed ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        onError={() => setStoryAvatarFailed(true)}
+                      />
                     ) : (
                       <span className="text-lg font-bold text-foreground">
                         {(user.username ?? user.name ?? "?")[0]?.toUpperCase()}

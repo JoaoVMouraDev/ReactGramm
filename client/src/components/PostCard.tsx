@@ -4,6 +4,7 @@ import {
   Bookmark,
   Flag,
   Heart,
+  ImageOff,
   Link as LinkIcon,
   MessageCircle,
   MoreHorizontal,
@@ -49,6 +50,8 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [heartAnim, setHeartAnim] = useState(false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   
   const menuRef = useRef<HTMLDivElement>(null);
   const isOwner = user?.id === post.userId;
@@ -131,6 +134,14 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
     return () => (globalThis as any).document?.removeEventListener("mousedown", handleClick);
   }, []);
 
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [post.user?.avatarUrl]);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [post.imageUrl]);
+
   const handleLike = () => {
     if (!user) {
       toast.error("Faça login para curtir posts");
@@ -187,11 +198,12 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
             >
               <div className="w-9 h-9 rounded-full ig-gradient p-0.5">
                 <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
-                  {post.user?.avatarUrl ? (
+                  {post.user?.avatarUrl && !avatarFailed ? (
                     <img
                       src={post.user.avatarUrl}
-                      alt={username}
+                      alt=""
                       className="w-full h-full object-cover"
+                      onError={() => setAvatarFailed(true)}
                     />
                   ) : (
                     <span className="text-xs font-bold text-foreground">{avatarLetter}</span>
@@ -265,12 +277,20 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
           onDoubleClick={handleDoubleClick}
           onClick={() => navigate(`/post/${post.id}`)}
         >
-          <img
-            src={post.imageUrl}
-            alt={post.caption ?? "Post"}
-            className="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-500 ease-out"
-            loading="lazy"
-          />
+          {imageFailed ? (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <ImageOff size={32} />
+              <span className="text-sm font-medium">Imagem indisponível</span>
+            </div>
+          ) : (
+            <img
+              src={post.imageUrl}
+              alt=""
+              className="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-500 ease-out"
+              loading="lazy"
+              onError={() => setImageFailed(true)}
+            />
+          )}
           {/* Double-tap heart animation */}
           {heartAnim && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

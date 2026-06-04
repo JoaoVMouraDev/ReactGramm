@@ -176,7 +176,7 @@ const likesRouter = router({
   toggle: protectedProcedure
     .input(z.object({ postId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      return toggleLike(input.postId, ctx.user.id);
+      return toggleLike(ctx.user.id, input.postId);
     }),
 
   getByPost: publicProcedure
