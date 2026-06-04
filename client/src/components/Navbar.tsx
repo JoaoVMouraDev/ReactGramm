@@ -40,6 +40,10 @@ function formatNotificationTime(value: Date | string) {
   });
 }
 
+function getSeenNotificationsKey(userId: number | string | undefined) {
+  return `reactgram-seen-notifications-${userId ?? "guest"}`;
+}
+
 export function Navbar() {
   const [, navigate] = useLocation();
   const { user, logout } = useAuth();
@@ -48,6 +52,9 @@ export function Navbar() {
   const [showSearch, setShowSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [seenNotificationIds, setSeenNotificationIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const searchRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -62,6 +69,46 @@ export function Navbar() {
       { limit: 20 },
       { enabled: Boolean(user), refetchInterval: 15000 },
     );
+  const unreadNotificationsCount = notifications.filter(
+    (notification) => !seenNotificationIds.has(notification.id),
+  ).length;
+
+  useEffect(() => {
+    if (!user?.id) {
+      setSeenNotificationIds(new Set());
+      return;
+    }
+
+    try {
+      const saved = localStorage.getItem(getSeenNotificationsKey(user.id));
+      const ids = saved ? (JSON.parse(saved) as string[]) : [];
+      setSeenNotificationIds(new Set(ids));
+    } catch {
+      setSeenNotificationIds(new Set());
+    }
+  }, [user?.id]);
+
+  const markNotificationsAsSeen = () => {
+    if (!user?.id || notifications.length === 0) return;
+
+    setSeenNotificationIds((current) => {
+      const next = new Set(current);
+      for (const notification of notifications) {
+        next.add(notification.id);
+      }
+      localStorage.setItem(
+        getSeenNotificationsKey(user.id),
+        JSON.stringify(Array.from(next).slice(-100)),
+      );
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (showNotifications) {
+      markNotificationsAsSeen();
+    }
+  }, [showNotifications, notifications]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -190,14 +237,20 @@ export function Navbar() {
           {user && (
             <div ref={notificationsRef} className="relative">
               <button
-                onClick={() => setShowNotifications((value) => !value)}
+                onClick={() => {
+                  setShowNotifications((value) => {
+                    const nextValue = !value;
+                    if (nextValue) markNotificationsAsSeen();
+                    return nextValue;
+                  });
+                }}
                 className="relative p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
                 title="Notificações"
               >
                 <Bell size={20} />
-                {notifications.length > 0 && (
+                {unreadNotificationsCount > 0 && (
                   <span className="absolute right-1.5 top-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-4 text-center">
-                    {notifications.length > 9 ? "9+" : notifications.length}
+                    {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
                   </span>
                 )}
               </button>
