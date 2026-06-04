@@ -119,9 +119,13 @@ const postsRouter = router({
     .query(async ({ input, ctx }) => {
       const post = await getPostById(input.id);
       if (!post) throw new TRPCError({ code: "NOT_FOUND" });
+      const likedPostIds = ctx.user
+        ? await getUserLikedPostIds(ctx.user.id, [post.id])
+        : [];
       return {
         ...post,
         hashtags: post.hashtags ? JSON.parse(post.hashtags) : [],
+        isLiked: likedPostIds.includes(post.id),
       };
     }),
 

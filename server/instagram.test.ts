@@ -62,8 +62,24 @@ vi.mock("./db", () => ({
         imageKey: "posts/1/img.jpg",
         caption: "Test caption",
         hashtags: JSON.stringify(["test"]),
+        likesCount: 1,
+        commentsCount: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
+        user: {
+          id: 1,
+          openId: "openid-1",
+          username: "testuser",
+          name: "Test User",
+          avatarUrl: null,
+          avatarKey: null,
+          email: "test@example.com",
+          loginMethod: "email",
+          role: "user",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastSignedIn: new Date(),
+        },
       };
     }
     return undefined;

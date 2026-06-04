@@ -366,11 +366,30 @@ export async function deletePost(postId: number, userId: number): Promise<void> 
   await db.delete(posts).where(and(eq(posts.id, postId), eq(posts.userId, userId)));
 }
 
-export async function getPostById(postId: number): Promise<Post | undefined> {
+export async function getPostById(
+  postId: number
+): Promise<(Post & { user: User; likesCount: number; commentsCount: number }) | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
-  return result[0];
+  const result = await db
+    .select({
+      id: posts.id,
+      userId: posts.userId,
+      imageUrl: posts.imageUrl,
+      imageKey: posts.imageKey,
+      caption: posts.caption,
+      hashtags: posts.hashtags,
+      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
+      commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+      user: USER_SELECT,
+    })
+    .from(posts)
+    .innerJoin(users, eq(posts.userId, users.id))
+    .where(eq(posts.id, postId))
+    .limit(1);
+  return result[0] as any;
 }
 
 export async function getFeedPosts(

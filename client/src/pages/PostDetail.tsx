@@ -42,9 +42,6 @@ export default function PostDetail() {
             post={{
               ...post,
               hashtags: post.hashtags ?? [],
-              likesCount: 0,
-              commentsCount: 0,
-              isLiked: false,
             }}
           />
         )}
