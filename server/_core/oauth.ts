@@ -10,6 +10,17 @@ function getQueryParam(req: Request, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function getBaseUrl(req: Request): string {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const proto =
+    (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)
+      ?.split(",")[0]
+      ?.trim() ||
+    req.protocol ||
+    "https";
+  return `${proto}://${req.get("host")}`;
+}
+
 // ─── Manus OAuth (existing) ────────────────────────────────────────────────────
 
 async function setSessionCookie(res: Response, req: Request, openId: string, name: string) {
@@ -65,7 +76,7 @@ export function registerOAuthRoutes(app: Express) {
     }
     const params = new URLSearchParams({
       client_id: ENV.googleClientId,
-      redirect_uri: `${_req.protocol}://${_req.get("host")}/api/auth/google/callback`,
+      redirect_uri: `${getBaseUrl(_req)}/api/auth/google/callback`,
       response_type: "code",
       scope: "openid email profile",
       access_type: "offline",
@@ -86,7 +97,7 @@ export function registerOAuthRoutes(app: Express) {
           code,
           client_id: ENV.googleClientId,
           client_secret: ENV.googleClientSecret,
-          redirect_uri: `${req.protocol}://${req.get("host")}/api/auth/google/callback`,
+          redirect_uri: `${getBaseUrl(req)}/api/auth/google/callback`,
           grant_type: "authorization_code",
         }),
       });
@@ -123,7 +134,7 @@ export function registerOAuthRoutes(app: Express) {
     }
     const params = new URLSearchParams({
       client_id: ENV.githubClientId,
-      redirect_uri: `${_req.protocol}://${_req.get("host")}/api/auth/github/callback`,
+      redirect_uri: `${getBaseUrl(_req)}/api/auth/github/callback`,
       scope: "read:user user:email",
     });
     res.redirect(`https://github.com/login/oauth/authorize?${params}`);
@@ -145,7 +156,7 @@ export function registerOAuthRoutes(app: Express) {
           client_id: ENV.githubClientId,
           client_secret: ENV.githubClientSecret,
           code,
-          redirect_uri: `${req.protocol}://${req.get("host")}/api/auth/github/callback`,
+          redirect_uri: `${getBaseUrl(req)}/api/auth/github/callback`,
         }),
       });
       const tokens = await tokenRes.json() as any;
