@@ -3,15 +3,18 @@ import { getLoginUrl } from "@/const";
 import { useTheme } from "@/contexts/ThemeContext";
 import { trpc } from "@/lib/trpc";
 import {
+  Bell,
   Compass,
   Heart,
   Home,
   LogOut,
+  MessageCircle,
   Moon,
   PlusSquare,
   Search,
   Sun,
   User,
+  UserPlus,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -24,9 +27,32 @@ export function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const sampleNotifications = [
+    {
+      icon: UserPlus,
+      title: "Novo seguidor",
+      text: "carlos992 começou a seguir você",
+      time: "agora",
+    },
+    {
+      icon: Heart,
+      title: "Nova curtida",
+      text: "luis123 curtiu sua foto",
+      time: "2 min",
+    },
+    {
+      icon: MessageCircle,
+      title: "Novo comentário",
+      text: "ana comentou na sua foto",
+      time: "5 min",
+    },
+  ];
 
   const { data: searchResults } = trpc.users.search.useQuery(
     { query: searchQuery, limit: 8 },
@@ -37,6 +63,12 @@ export function Navbar() {
     const handleClick = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowSearch(false);
+      }
+      if (
+        notificationsRef.current &&
+        !notificationsRef.current.contains(e.target as Node)
+      ) {
+        setShowNotifications(false);
       }
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setShowUserMenu(false);
@@ -147,6 +179,60 @@ export function Navbar() {
           >
             {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
+          {user && (
+            <div ref={notificationsRef} className="relative">
+              <button
+                onClick={() => setShowNotifications((value) => !value)}
+                className="relative p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
+                title="Notificações"
+              >
+                <Bell size={20} />
+                <span className="absolute right-1.5 top-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-4 text-center">
+                  {sampleNotifications.length}
+                </span>
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-card border border-border rounded-xl shadow-xl overflow-hidden animate-fade-in z-50">
+                  <div className="px-4 py-3 border-b border-border">
+                    <p className="text-sm font-semibold">Notificações</p>
+                    <p className="text-xs text-muted-foreground">
+                      Exemplos: seguidores, curtidas e comentários
+                    </p>
+                  </div>
+
+                  <div className="divide-y divide-border">
+                    {sampleNotifications.map((notification) => {
+                      const Icon = notification.icon;
+
+                      return (
+                        <button
+                          key={notification.title}
+                          onClick={() => setShowNotifications(false)}
+                          className="w-full px-4 py-3 flex items-start gap-3 hover:bg-muted transition-colors text-left"
+                        >
+                          <span className="mt-0.5 w-9 h-9 rounded-full ig-gradient text-white flex items-center justify-center shrink-0">
+                            <Icon size={17} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold">
+                              {notification.title}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {notification.text}
+                            </span>
+                          </span>
+                          <span className="text-[11px] text-muted-foreground shrink-0">
+                            {notification.time}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {user ? (
             <div ref={userMenuRef} className="relative">
               <button

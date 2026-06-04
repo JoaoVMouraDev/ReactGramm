@@ -86,6 +86,9 @@ export default function Signup() {
                 </Button>
               </a>
             </div>
+            <p className="text-center text-[11px] leading-tight text-muted-foreground">
+              Google e GitHub não funcionando por agora
+            </p>
 
             {/* Divider */}
             <div className="relative">
