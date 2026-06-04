@@ -36,7 +36,7 @@ import { storagePut } from "./storage.ts";
 
 // Constantes necessárias para a sessão
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
-const COOKIE_NAME = "session"; 
+const COOKIE_NAME = "app_session_id"; 
 
 // ─── Upload Router ─────────────────────────────────────────────────────────────
 
