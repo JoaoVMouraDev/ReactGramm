@@ -19,7 +19,7 @@ vi.mock("./db", () => ({
         avatarUrl: null,
         avatarKey: null,
         email: "test@example.com",
-        loginMethod: "manus",
+        loginMethod: "email",
         role: "user",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -86,7 +86,7 @@ vi.mock("./db", () => ({
 vi.mock("./storage", () => ({
   storagePut: vi.fn(async (key: string) => ({
     key,
-    url: `/manus-storage/${key}`,
+    url: `/media/${key}`,
   })),
 }));
 
@@ -108,7 +108,7 @@ function createAuthCtx(overrides: Partial<TrpcContext["user"]> = {}): TrpcContex
       username: "testuser",
       name: "Test User",
       email: "test@example.com",
-      loginMethod: "manus",
+      loginMethod: "email",
       role: "user",
       bio: "Hello!",
       avatarUrl: null,
