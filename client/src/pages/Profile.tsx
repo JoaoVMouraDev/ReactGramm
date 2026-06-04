@@ -9,7 +9,7 @@ import {
   UserCheck,
   UserPlus,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "wouter";
 import { MobileNav, Navbar } from "@/components/Navbar";
 import { PostCard } from "@/components/PostCard";
@@ -24,6 +24,7 @@ export default function Profile() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedPost, setSelectedPost] = useState<number | null>(null);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const [, navigate] = useLocation(); // Initialize navigate
   const utils = trpc.useUtils();
 
@@ -47,6 +48,10 @@ export default function Profile() {
       { userId: profile?.id ?? 0, limit: 30, offset: 0 },
       { enabled: !!profile?.id }
     );
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [profile?.avatarUrl]);
 
   const toggleFollowMutation = trpc.follows.toggle.useMutation({
     onSuccess: () => {
@@ -97,13 +102,14 @@ export default function Profile() {
           {/* Avatar */}
           <div className="flex justify-center sm:justify-start">
             <div className="relative">
-              <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full ig-gradient p-0.75">
+              <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full ig-gradient p-[3px]">
                 <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
-                  {profile.avatarUrl ? (
+                  {profile.avatarUrl && !avatarFailed ? (
                     <img
                       src={profile.avatarUrl}
-                      alt={profile.username ?? ""}
+                      alt=""
                       className="w-full h-full object-cover"
+                      onError={() => setAvatarFailed(true)}
                     />
                   ) : (
                     <span className="text-3xl sm:text-4xl font-bold text-foreground">

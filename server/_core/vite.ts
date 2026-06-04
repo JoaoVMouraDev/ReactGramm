@@ -62,6 +62,15 @@ export function serveStatic(app: Express) {
     );
   }
 
+  const localStoragePath = path.resolve(
+    import.meta.dirname,
+    "../..",
+    "client",
+    "public",
+    "local-storage"
+  );
+  app.use("/local-storage", express.static(localStoragePath));
+
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
