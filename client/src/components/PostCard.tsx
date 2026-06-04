@@ -124,6 +124,11 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
     onError: () => toast.error("Erro ao deletar post"),
   });
 
+  const { data: previewComments } = trpc.comments.getByPost.useQuery(
+    { postId: post.id, limit: 3, offset: 0 },
+    { enabled: commentsCount > 0 }
+  );
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !(menuRef.current as any).contains(e.target as any)) {
@@ -185,6 +190,7 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
 
   const username = post.user?.username ?? post.user?.name ?? "usuário";
   const avatarLetter = username[0]?.toUpperCase() ?? "?";
+  const visibleComments = (previewComments ?? []).slice(-3);
 
   return (
     <>
@@ -388,13 +394,40 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
           </div>
         )}
 
+        {visibleComments.length > 0 && (
+          <div className="px-3 pb-2 space-y-1.5">
+            {visibleComments.map((comment: any) => {
+              const commentUsername =
+                comment.user?.username ?? comment.user?.name ?? "usuário";
+
+              return (
+                <p key={comment.id} className="text-sm leading-snug">
+                  <button
+                    onClick={() =>
+                      navigate(`/profile/${comment.user?.username ?? comment.userId}`)
+                    }
+                    className="font-semibold hover:underline mr-1"
+                  >
+                    {commentUsername}
+                  </button>
+                  <span className="text-foreground/80 wrap-break-word">
+                    {comment.text}
+                  </span>
+                </p>
+              );
+            })}
+          </div>
+        )}
+
         {/* Comments preview */}
         {commentsCount > 0 && (
           <button
             onClick={() => setShowComments(true)}
             className="px-3 pb-3 text-sm text-muted-foreground hover:text-foreground transition-colors text-left"
           >
-            Ver {commentsCount === 1 ? "1 comentário" : `todos os ${commentsCount} comentários`}
+            {commentsCount > 3
+              ? `Ver todos os ${commentsCount} comentários`
+              : "Ver comentários"}
           </button>
         )}
       </article>

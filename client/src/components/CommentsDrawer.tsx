@@ -33,7 +33,7 @@ export function CommentsDrawer({
   const createMutation = trpc.comments.create.useMutation({
     onSuccess: () => {
       setText("");
-      utils.comments.getByPost.invalidate({ postId });
+      utils.comments.getByPost.invalidate();
       onCommentAdded?.();
     },
     onError: (err) => {
