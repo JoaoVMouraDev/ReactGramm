@@ -148,6 +148,26 @@ const USER_SELECT = {
   lastSignedIn: users.lastSignedIn,
 };
 
+function shouldBeAdmin(user: Pick<User, "openId" | "username" | "email">): boolean {
+  const username = user.username?.toLowerCase();
+  const email = user.email?.toLowerCase();
+  return (
+    user.openId === ENV.ownerOpenId ||
+    Boolean(username && ENV.adminUsernames.includes(username)) ||
+    Boolean(email && ENV.adminEmails.includes(email))
+  );
+}
+
+async function applyAdminRole(user: User | undefined): Promise<User | undefined> {
+  if (!user || user.role === "admin" || !shouldBeAdmin(user)) return user;
+
+  const db = await getDb();
+  if (!db) return user;
+
+  await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+  return { ...user, role: "admin" };
+}
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -195,28 +215,28 @@ export async function getUserByOpenId(openId: string): Promise<User | undefined>
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result[0];
+  return applyAdminRole(result[0]);
 }
 
 export async function getUserById(id: number): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-  return result[0];
+  return applyAdminRole(result[0]);
 }
 
 export async function getUserByUsername(username: string): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
-  return result[0];
+  return applyAdminRole(result[0]);
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result[0];
+  return applyAdminRole(result[0]);
 }
 
 export async function getUserByGoogleId(googleId: string): Promise<User | undefined> {
@@ -252,6 +272,9 @@ export async function createUserWithEmail(data: {
     username: data.username,
     name: data.name ?? data.username,
     loginMethod: "email",
+    role: shouldBeAdmin({ openId, username: data.username, email: data.email })
+      ? "admin"
+      : "user",
     lastSignedIn: new Date(),
   });
 
@@ -316,6 +339,9 @@ export async function upsertOAuthUser(data: {
     username,
     avatarUrl: data.avatarUrl ?? null,
     loginMethod: data.provider,
+    role: shouldBeAdmin({ openId, username, email: data.email ?? null })
+      ? "admin"
+      : "user",
     lastSignedIn: new Date(),
     ...providerField,
   });
@@ -360,10 +386,16 @@ export async function createPost(data: InsertPost): Promise<number> {
   return created.id;
 }
 
-export async function deletePost(postId: number, userId: number): Promise<void> {
+export async function deletePost(
+  postId: number,
+  userId: number,
+  isAdmin = false
+): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.delete(posts).where(and(eq(posts.id, postId), eq(posts.userId, userId)));
+  await db
+    .delete(posts)
+    .where(isAdmin ? eq(posts.id, postId) : and(eq(posts.id, postId), eq(posts.userId, userId)));
 }
 
 export async function getPostById(

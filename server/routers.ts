@@ -132,7 +132,7 @@ const postsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      await deletePost(input.id, ctx.user.id);
+      await deletePost(input.id, ctx.user.id, ctx.user.role === "admin");
       return { success: true };
     }),
 

@@ -55,6 +55,7 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
   
   const menuRef = useRef<HTMLDivElement>(null);
   const isOwner = user?.id === post.userId;
+  const canDeletePost = isOwner || user?.role === "admin";
 
   const utils = trpc.useUtils();
 
@@ -246,13 +247,13 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
             </button>
             {showMenu && (
               <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in">
-                {isOwner && (
+                {canDeletePost && (
                   <button
                     onClick={handleDelete}
                     className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-500/10 text-red-500 text-sm text-left transition-colors border-b border-border"
                   >
                     <Trash2 size={15} />
-                    Deletar post
+                    {isOwner ? "Deletar post" : "Deletar como admin"}
                   </button>
                 )}
                 <button
@@ -262,7 +263,7 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
                   <LinkIcon size={15} className="text-muted-foreground" />
                   Copiar link
                 </button>
-                {!isOwner && (
+                {!canDeletePost && (
                   <button
                     onClick={handleReport}
                     className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-500/10 text-red-500 text-sm text-left transition-colors"
