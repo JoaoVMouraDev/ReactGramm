@@ -47,12 +47,12 @@ export async function storagePut(
   const { serviceUrl, serviceKey, isLocal } = getStorageConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
 
-  if (ENV.vercelBlobToken) {
+  if (ENV.vercelBlobToken || ENV.vercelBlobStoreId) {
     const body = typeof data === "string" ? data : Buffer.from(data);
     const blob = await put(key, body, {
       access: "public",
       contentType,
-      token: ENV.vercelBlobToken,
+      ...(ENV.vercelBlobToken ? { token: ENV.vercelBlobToken } : {}),
     });
     return { key, url: blob.url };
   }

@@ -16,6 +16,7 @@ export const ENV = {
   storageApiKey:
     process.env.STORAGE_API_KEY ?? process.env.BUILT_IN_FORGE_API_KEY ?? "",
   vercelBlobToken: process.env.BLOB_READ_WRITE_TOKEN ?? "",
+  vercelBlobStoreId: process.env.BLOB_STORE_ID ?? "",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   githubClientId: process.env.GITHUB_CLIENT_ID ?? "",

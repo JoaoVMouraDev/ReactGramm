@@ -111,6 +111,7 @@ var ENV = {
   storageApiUrl: process.env.STORAGE_API_URL ?? process.env.BUILT_IN_FORGE_API_URL ?? "",
   storageApiKey: process.env.STORAGE_API_KEY ?? process.env.BUILT_IN_FORGE_API_KEY ?? "",
   vercelBlobToken: process.env.BLOB_READ_WRITE_TOKEN ?? "",
+  vercelBlobStoreId: process.env.BLOB_STORE_ID ?? "",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   githubClientId: process.env.GITHUB_CLIENT_ID ?? "",
@@ -834,12 +835,12 @@ function appendHashSuffix(relKey) {
 async function storagePut(relKey, data, contentType = "application/octet-stream") {
   const { serviceUrl, serviceKey, isLocal } = getStorageConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
-  if (ENV.vercelBlobToken) {
+  if (ENV.vercelBlobToken || ENV.vercelBlobStoreId) {
     const body = typeof data === "string" ? data : Buffer.from(data);
     const blob2 = await put(key, body, {
       access: "public",
       contentType,
-      token: ENV.vercelBlobToken
+      ...ENV.vercelBlobToken ? { token: ENV.vercelBlobToken } : {}
     });
     return { key, url: blob2.url };
   }
