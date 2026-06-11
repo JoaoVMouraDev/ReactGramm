@@ -456,19 +456,37 @@ async function getFeedPosts(limit, offset) {
 async function getUserPosts(userId, limit, offset) {
   const db = await getDb();
   if (!db) return [];
-  const result = await db.select({
+  const userPosts = await db.select({
     id: posts.id,
     userId: posts.userId,
     imageUrl: posts.imageUrl,
     imageKey: posts.imageKey,
     caption: posts.caption,
     hashtags: posts.hashtags,
-    likesCount: sql`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
-    commentsCount: sql`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
     createdAt: posts.createdAt,
     updatedAt: posts.updatedAt
   }).from(posts).where(eq(posts.userId, userId)).orderBy(desc(posts.createdAt)).limit(limit).offset(offset);
-  return result;
+  const postIds = userPosts.map((post) => post.id);
+  if (postIds.length === 0) return [];
+  const [likeCounts, commentCounts] = await Promise.all([
+    db.select({
+      postId: likes.postId,
+      count: sql`CAST(count(*) AS INTEGER)`
+    }).from(likes).where(inArray(likes.postId, postIds)).groupBy(likes.postId),
+    db.select({
+      postId: comments.postId,
+      count: sql`CAST(count(*) AS INTEGER)`
+    }).from(comments).where(inArray(comments.postId, postIds)).groupBy(comments.postId)
+  ]);
+  const likesByPost = new Map(likeCounts.map((row) => [row.postId, Number(row.count)]));
+  const commentsByPost = new Map(
+    commentCounts.map((row) => [row.postId, Number(row.count)])
+  );
+  return userPosts.map((post) => ({
+    ...post,
+    likesCount: likesByPost.get(post.id) ?? 0,
+    commentsCount: commentsByPost.get(post.id) ?? 0
+  }));
 }
 async function getPostsByHashtag(hashtag, limit, offset) {
   const db = await getDb();
