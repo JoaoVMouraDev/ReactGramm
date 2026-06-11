@@ -44,6 +44,7 @@ export default function PostDetail() {
               hashtags: post.hashtags ?? [],
             }}
             onUpdated={() => refetch()}
+            expandableImage
           />
         )}
       </main>

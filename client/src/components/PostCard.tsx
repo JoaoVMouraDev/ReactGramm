@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { CommentsDrawer } from "./CommentsDrawer";
 import { UserHoverCard } from "./UserHoverCard";
 import { EditPostModal } from "./EditPostModal";
+import { ImageLightbox } from "./ImageLightbox";
 
 interface PostCardProps {
   post: {
@@ -40,9 +41,10 @@ interface PostCardProps {
   };
   onDeleted?: () => void;
   onUpdated?: () => void;
+  expandableImage?: boolean;
 }
 
-export function PostCard({ post, onDeleted, onUpdated }: PostCardProps) {
+export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }: PostCardProps) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const [isLiked, setIsLiked] = useState(post.isLiked ?? false);
@@ -52,6 +54,7 @@ export function PostCard({ post, onDeleted, onUpdated }: PostCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showImageLightbox, setShowImageLightbox] = useState(false);
   const [heartAnim, setHeartAnim] = useState(false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -305,7 +308,9 @@ export function PostCard({ post, onDeleted, onUpdated }: PostCardProps) {
         <div
           className="relative flex w-full cursor-pointer items-center justify-center overflow-hidden bg-black"
           onDoubleClick={handleDoubleClick}
-          onClick={() => navigate(`/post/${post.id}`)}
+          onClick={() =>
+            expandableImage ? setShowImageLightbox(true) : navigate(`/post/${post.id}`)
+          }
         >
           {imageFailed ? (
             <div className="flex min-h-80 w-full flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
@@ -467,6 +472,13 @@ export function PostCard({ post, onDeleted, onUpdated }: PostCardProps) {
           post={post}
           onClose={() => setShowEditModal(false)}
           onSaved={handleUpdated}
+        />
+      ) : null}
+      {showImageLightbox ? (
+        <ImageLightbox
+          src={post.imageUrl}
+          alt={post.caption ?? "Imagem do post"}
+          onClose={() => setShowImageLightbox(false)}
         />
       ) : null}
     </>
