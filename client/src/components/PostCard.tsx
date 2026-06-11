@@ -8,6 +8,7 @@ import {
   Link as LinkIcon,
   MessageCircle,
   MoreHorizontal,
+  Pencil,
   Send,
   Trash2,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { CommentsDrawer } from "./CommentsDrawer";
 import { UserHoverCard } from "./UserHoverCard";
+import { EditPostModal } from "./EditPostModal";
 
 interface PostCardProps {
   post: {
@@ -37,9 +39,10 @@ interface PostCardProps {
     };
   };
   onDeleted?: () => void;
+  onUpdated?: () => void;
 }
 
-export function PostCard({ post, onDeleted }: PostCardProps) {
+export function PostCard({ post, onDeleted, onUpdated }: PostCardProps) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const [isLiked, setIsLiked] = useState(post.isLiked ?? false);
@@ -48,6 +51,7 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
   const [commentsCount, setCommentsCount] = useState(post.commentsCount);
   const [showMenu, setShowMenu] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [heartAnim, setHeartAnim] = useState(false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -124,6 +128,14 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
     },
     onError: () => toast.error("Erro ao deletar post"),
   });
+
+  const handleUpdated = () => {
+    setShowEditModal(false);
+    utils.posts.feed.invalidate();
+    utils.posts.getById.invalidate({ id: post.id });
+    utils.posts.byUser.invalidate({ userId: post.userId });
+    onUpdated?.();
+  };
 
   const { data: previewComments } = trpc.comments.getByPost.useQuery(
     { postId: post.id, limit: 3, offset: 0 },
@@ -254,6 +266,18 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
                   >
                     <Trash2 size={15} />
                     {isOwner ? "Deletar post" : "Deletar como admin"}
+                  </button>
+                )}
+                {isOwner && (
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowEditModal(true);
+                    }}
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted text-sm text-left transition-colors border-b border-border"
+                  >
+                    <Pencil size={15} />
+                    Editar post
                   </button>
                 )}
                 <button
@@ -439,6 +463,13 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
         onClose={() => setShowComments(false)}
         onCommentAdded={() => setCommentsCount((c) => c + 1)}
       />
+      {showEditModal ? (
+        <EditPostModal
+          post={post}
+          onClose={() => setShowEditModal(false)}
+          onSaved={handleUpdated}
+        />
+      ) : null}
     </>
   );
 }

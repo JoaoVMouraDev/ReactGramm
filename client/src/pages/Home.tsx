@@ -152,6 +152,7 @@ export default function Home() {
                 key={post.id}
                 post={post}
                 onDeleted={() => refetch()}
+                onUpdated={() => refetch()}
               />
             ))}
 

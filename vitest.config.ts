@@ -9,7 +9,6 @@ export default defineConfig({
     alias: {
       "@": path.resolve(projectRoot, "client", "src"),
       "@shared": path.resolve(projectRoot, "shared"),
-      "@assets": path.resolve(projectRoot, "attached_assets"),
     },
   },
   test: {

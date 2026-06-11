@@ -41,7 +41,7 @@ export default function UploadPost() {
         <Navbar />
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <p className="font-semibold text-lg">Faça login para publicar</p>
-          <button // Changed to use navigate for better SPA experience
+          <button
             onClick={() => navigate("/login")}
             className="px-6 py-2.5 rounded-xl ig-gradient text-white font-semibold hover:opacity-90 transition-opacity"
           >

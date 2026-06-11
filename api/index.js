@@ -108,8 +108,8 @@ var ENV = {
   adminUsernames: (process.env.ADMIN_USERNAMES ?? "carlos992").split(",").map((username) => username.trim().toLowerCase()).filter(Boolean),
   adminEmails: (process.env.ADMIN_EMAILS ?? "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean),
   isProduction: process.env.NODE_ENV === "production",
-  storageApiUrl: process.env.STORAGE_API_URL ?? process.env.BUILT_IN_FORGE_API_URL ?? "",
-  storageApiKey: process.env.STORAGE_API_KEY ?? process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  storageApiUrl: process.env.STORAGE_API_URL ?? "",
+  storageApiKey: process.env.STORAGE_API_KEY ?? "",
   vercelBlobToken: process.env.BLOB_READ_WRITE_TOKEN ?? "",
   vercelBlobStoreId: process.env.BLOB_STORE_ID ?? "",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
@@ -406,6 +406,12 @@ async function createPost(data) {
   const [created] = await db.insert(posts).values(data).returning({ id: posts.id });
   return created.id;
 }
+async function updatePost(postId, userId, data) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  const updated = await db.update(posts).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(and(eq(posts.id, postId), eq(posts.userId, userId))).returning({ id: posts.id });
+  return updated.length > 0;
+}
 async function deletePost(postId, userId, isAdmin = false) {
   const db = await getDb();
   if (!db) return;
@@ -612,11 +618,23 @@ async function getFollowersCount(userId) {
   const result = await db.select({ count: sql`count(*)` }).from(follows).where(eq(follows.followingId, userId));
   return Number(result[0]?.count ?? 0);
 }
+async function getFollowers(userId) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({ user: USER_SELECT }).from(follows).innerJoin(users, eq(follows.followerId, users.id)).where(eq(follows.followingId, userId)).orderBy(desc(follows.createdAt));
+  return result.map((row) => row.user);
+}
 async function getFollowingCount(userId) {
   const db = await getDb();
   if (!db) return 0;
   const result = await db.select({ count: sql`count(*)` }).from(follows).where(eq(follows.followerId, userId));
   return Number(result[0]?.count ?? 0);
+}
+async function getFollowing(userId) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({ user: USER_SELECT }).from(follows).innerJoin(users, eq(follows.followingId, users.id)).where(eq(follows.followerId, userId)).orderBy(desc(follows.createdAt));
+  return result.map((row) => row.user);
 }
 async function isFollowing(followerId, followingId) {
   const db = await getDb();
@@ -970,6 +988,22 @@ var postsRouter = router({
     });
     return { id: postId };
   }),
+  update: protectedProcedure.input(
+    z.object({
+      id: z.number(),
+      caption: z.string().max(2200),
+      hashtags: z.array(z.string().min(1).max(50)).max(10)
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const updated = await updatePost(input.id, ctx.user.id, {
+      caption: input.caption.trim() || null,
+      hashtags: input.hashtags.length ? JSON.stringify(input.hashtags) : null
+    });
+    if (!updated) {
+      throw new TRPCError2({ code: "FORBIDDEN", message: "Voc\xEA n\xE3o pode editar este post" });
+    }
+    return { success: true };
+  }),
   getById: publicProcedure.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
     const post = await getPostById(input.id);
     if (!post) throw new TRPCError2({ code: "NOT_FOUND" });
@@ -1128,6 +1162,32 @@ var followsRouter = router({
   }),
   getFollowingCount: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
     return { count: await getFollowingCount(input.userId) };
+  }),
+  followers: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input, ctx }) => {
+    const people = await getFollowers(input.userId);
+    return Promise.all(
+      people.map(async (person) => ({
+        id: person.id,
+        username: person.username,
+        name: person.name,
+        avatarUrl: person.avatarUrl,
+        isFollowing: ctx.user ? ctx.user.id === person.id || await isFollowing(ctx.user.id, person.id) : false,
+        isCurrentUser: ctx.user?.id === person.id
+      }))
+    );
+  }),
+  following: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input, ctx }) => {
+    const people = await getFollowing(input.userId);
+    return Promise.all(
+      people.map(async (person) => ({
+        id: person.id,
+        username: person.username,
+        name: person.name,
+        avatarUrl: person.avatarUrl,
+        isFollowing: ctx.user ? ctx.user.id === person.id || await isFollowing(ctx.user.id, person.id) : false,
+        isCurrentUser: ctx.user?.id === person.id
+      }))
+    );
   })
 });
 var notificationsRouter = router({

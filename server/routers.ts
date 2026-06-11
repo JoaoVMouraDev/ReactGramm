@@ -4,7 +4,9 @@ import {
   createPost,
   deletePost,
   getFeedPosts,
+  getFollowers,
   getFollowersCount,
+  getFollowing,
   getFollowingCount,
   getLikesByPost,
   getPostById,
@@ -18,6 +20,7 @@ import {
   searchUsers,
   toggleFollow,
   toggleLike,
+  updatePost,
   updateUserProfile,
   getCommentsByPost,
   getNotificationsForUser,
@@ -112,6 +115,25 @@ const postsRouter = router({
         hashtags: input.hashtags ? JSON.stringify(input.hashtags) : null,
       });
       return { id: postId };
+    }),
+
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        caption: z.string().max(2200),
+        hashtags: z.array(z.string().min(1).max(50)).max(10),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const updated = await updatePost(input.id, ctx.user.id, {
+        caption: input.caption.trim() || null,
+        hashtags: input.hashtags.length ? JSON.stringify(input.hashtags) : null,
+      });
+      if (!updated) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode editar este post" });
+      }
+      return { success: true };
     }),
 
   getById: publicProcedure
@@ -337,6 +359,42 @@ const followsRouter = router({
     .input(z.object({ userId: z.number() }))
     .query(async ({ input }) => {
       return { count: await getFollowingCount(input.userId) };
+    }),
+
+  followers: publicProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const people = await getFollowers(input.userId);
+      return Promise.all(
+        people.map(async (person) => ({
+          id: person.id,
+          username: person.username,
+          name: person.name,
+          avatarUrl: person.avatarUrl,
+          isFollowing: ctx.user
+            ? ctx.user.id === person.id || (await isFollowing(ctx.user.id, person.id))
+            : false,
+          isCurrentUser: ctx.user?.id === person.id,
+        })),
+      );
+    }),
+
+  following: publicProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const people = await getFollowing(input.userId);
+      return Promise.all(
+        people.map(async (person) => ({
+          id: person.id,
+          username: person.username,
+          name: person.name,
+          avatarUrl: person.avatarUrl,
+          isFollowing: ctx.user
+            ? ctx.user.id === person.id || (await isFollowing(ctx.user.id, person.id))
+            : false,
+          isCurrentUser: ctx.user?.id === person.id,
+        })),
+      );
     }),
 });
 

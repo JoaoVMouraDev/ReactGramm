@@ -11,10 +11,8 @@ export const ENV = {
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean),
   isProduction: process.env.NODE_ENV === "production",
-  storageApiUrl:
-    process.env.STORAGE_API_URL ?? process.env.BUILT_IN_FORGE_API_URL ?? "",
-  storageApiKey:
-    process.env.STORAGE_API_KEY ?? process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  storageApiUrl: process.env.STORAGE_API_URL ?? "",
+  storageApiKey: process.env.STORAGE_API_KEY ?? "",
   vercelBlobToken: process.env.BLOB_READ_WRITE_TOKEN ?? "",
   vercelBlobStoreId: process.env.BLOB_STORE_ID ?? "",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",

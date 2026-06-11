@@ -410,6 +410,21 @@ export async function createPost(data: InsertPost): Promise<number> {
   return created.id;
 }
 
+export async function updatePost(
+  postId: number,
+  userId: number,
+  data: { caption: string | null; hashtags: string | null },
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  const updated = await db
+    .update(posts)
+    .set({ ...data, updatedAt: new Date() })
+    .where(and(eq(posts.id, postId), eq(posts.userId, userId)))
+    .returning({ id: posts.id });
+  return updated.length > 0;
+}
+
 export async function deletePost(
   postId: number,
   userId: number,
@@ -751,6 +766,18 @@ export async function getFollowersCount(userId: number): Promise<number> {
   return Number(result[0]?.count ?? 0);
 }
 
+export async function getFollowers(userId: number): Promise<User[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db
+    .select({ user: USER_SELECT })
+    .from(follows)
+    .innerJoin(users, eq(follows.followerId, users.id))
+    .where(eq(follows.followingId, userId))
+    .orderBy(desc(follows.createdAt));
+  return result.map((row) => row.user as User);
+}
+
 export async function getFollowingCount(userId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
@@ -759,6 +786,18 @@ export async function getFollowingCount(userId: number): Promise<number> {
     .from(follows)
     .where(eq(follows.followerId, userId));
   return Number(result[0]?.count ?? 0);
+}
+
+export async function getFollowing(userId: number): Promise<User[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db
+    .select({ user: USER_SELECT })
+    .from(follows)
+    .innerJoin(users, eq(follows.followingId, users.id))
+    .where(eq(follows.followerId, userId))
+    .orderBy(desc(follows.createdAt));
+  return result.map((row) => row.user as User);
 }
 
 export async function isFollowing(

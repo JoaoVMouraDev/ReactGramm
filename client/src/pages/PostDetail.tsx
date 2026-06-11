@@ -9,7 +9,7 @@ export default function PostDetail() {
   const postId = parseInt(params.id ?? "0");
   const [, navigate] = useLocation();
 
-  const { data: post, isLoading } = trpc.posts.getById.useQuery(
+  const { data: post, isLoading, refetch } = trpc.posts.getById.useQuery(
     { id: postId },
     { enabled: !!postId }
   );
@@ -43,6 +43,7 @@ export default function PostDetail() {
               ...post,
               hashtags: post.hashtags ?? [],
             }}
+            onUpdated={() => refetch()}
           />
         )}
       </main>

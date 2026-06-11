@@ -52,6 +52,7 @@ vi.mock("./db", () => ({
     return [];
   }),
   createPost: vi.fn(async () => 42),
+  updatePost: vi.fn(async () => true),
   deletePost: vi.fn(async () => {}),
   getPostById: vi.fn(async (id: number) => {
     if (id === 1) {
@@ -96,7 +97,9 @@ vi.mock("./db", () => ({
   toggleFollow: vi.fn(async () => ({ following: true })),
   isFollowing: vi.fn(async () => false),
   getFollowersCount: vi.fn(async () => 5),
+  getFollowers: vi.fn(async () => []),
   getFollowingCount: vi.fn(async () => 3),
+  getFollowing: vi.fn(async () => []),
   getPostsCount: vi.fn(async () => 10),
 }));
 
@@ -208,6 +211,23 @@ describe("posts", () => {
   it("delete post requires authentication", async () => {
     const caller = appRouter.createCaller(createPublicCtx());
     await expect(caller.posts.delete({ id: 1 })).rejects.toThrow();
+  });
+
+  it("update post requires authentication", async () => {
+    const caller = appRouter.createCaller(createPublicCtx());
+    await expect(
+      caller.posts.update({ id: 1, caption: "Atualizado", hashtags: ["teste"] }),
+    ).rejects.toThrow();
+  });
+
+  it("update post succeeds for its owner", async () => {
+    const caller = appRouter.createCaller(createAuthCtx());
+    const result = await caller.posts.update({
+      id: 1,
+      caption: "Atualizado",
+      hashtags: ["teste"],
+    });
+    expect(result.success).toBe(true);
   });
 });
 

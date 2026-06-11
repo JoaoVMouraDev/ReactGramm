@@ -5,7 +5,7 @@ import {
   Camera,
   Grid3X3,
   Loader2,
-  Settings, // Added navigate import
+  Settings,
   UserCheck,
   UserPlus,
 } from "lucide-react";
@@ -14,8 +14,9 @@ import { useParams } from "wouter";
 import { MobileNav, Navbar } from "@/components/Navbar";
 import { PostCard } from "@/components/PostCard";
 import { EditProfileModal } from "@/components/EditProfileModal";
+import { FollowListModal } from "@/components/FollowListModal";
 import { toast } from "sonner";
-import { useLocation } from "wouter"; // Import useLocation
+import { useLocation } from "wouter";
 
 export default function Profile() {
   const params = useParams<{ username: string }>();
@@ -23,9 +24,9 @@ export default function Profile() {
   const { user: currentUser } = useAuth();
   const [showEditModal, setShowEditModal] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [selectedPost, setSelectedPost] = useState<number | null>(null);
+  const [followList, setFollowList] = useState<"followers" | "following" | null>(null);
   const [avatarFailed, setAvatarFailed] = useState(false);
-  const [, navigate] = useLocation(); // Initialize navigate
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
 
   // Determinar se username é um número (ID) ou um username string
@@ -186,14 +187,20 @@ export default function Profile() {
                 <span className="font-bold text-base">{profile.postsCount}</span>
                 <span className="text-sm text-muted-foreground ml-1">posts</span>
               </div>
-              <div className="text-center sm:text-left">
+              <button
+                onClick={() => setFollowList("followers")}
+                className="text-center sm:text-left hover:opacity-70 transition-opacity"
+              >
                 <span className="font-bold text-base">{profile.followersCount}</span>
                 <span className="text-sm text-muted-foreground ml-1">seguidores</span>
-              </div>
-              <div className="text-center sm:text-left">
+              </button>
+              <button
+                onClick={() => setFollowList("following")}
+                className="text-center sm:text-left hover:opacity-70 transition-opacity"
+              >
                 <span className="font-bold text-base">{profile.followingCount}</span>
                 <span className="text-sm text-muted-foreground ml-1">seguindo</span>
-              </div>
+              </button>
             </div>
 
             {/* Bio */}
@@ -251,7 +258,7 @@ export default function Profile() {
             {userPosts.map((post: any) => (
               <button
                 key={post.id}
-                onClick={() => setSelectedPost(selectedPost === post.id ? null : post.id)}
+                onClick={() => navigate(`/post/${post.id}`)}
                 className="aspect-square overflow-hidden bg-muted relative group"
               >
                 <img
@@ -260,8 +267,8 @@ export default function Profile() {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-3 text-white text-sm font-semibold">
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/75 to-transparent px-2 pb-2 pt-8">
+                  <div className="flex gap-3 text-sm font-semibold text-white">
                     <span>❤️ {post.likesCount}</span>
                     <span>💬 {post.commentsCount}</span>
                   </div>
@@ -276,6 +283,7 @@ export default function Profile() {
                 key={post.id}
                 post={{ ...post, user: { id: profile.id, username: profile.username, name: profile.name, avatarUrl: profile.avatarUrl } }}
                 onDeleted={() => { refetchPosts(); refetchProfile(); }}
+                onUpdated={() => refetchPosts()}
               />
             ))}
           </div>
@@ -291,6 +299,15 @@ export default function Profile() {
           }}
         />
       )}
+
+      {followList ? (
+        <FollowListModal
+          userId={profile.id}
+          type={followList}
+          onClose={() => setFollowList(null)}
+          onChanged={() => refetchProfile()}
+        />
+      ) : null}
 
       <MobileNav />
     </div>
