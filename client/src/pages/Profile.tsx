@@ -166,7 +166,7 @@ export default function Profile() {
                   ) : (
                     <>
                       <UserPlus size={14} />
-                      Seguir
+                      {profile.isFollowedBy ? "Seguir de volta" : "Seguir"}
                     </>
                   )}
                 </button>

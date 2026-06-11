@@ -106,7 +106,7 @@ export function UserHoverCard({ username, children }: UserHoverCardProps) {
                       ) : (
                         <>
                           <UserPlus size={13} />
-                          Seguir
+                          {profile.isFollowedBy ? "Seguir de volta" : "Seguir"}
                         </>
                       )}
                     </button>

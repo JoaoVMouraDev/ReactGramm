@@ -1223,8 +1223,12 @@ var usersRouter = router({
       getPostsCount(user.id)
     ]);
     let isFollowingUser = false;
+    let isFollowedByUser = false;
     if (ctx.user && ctx.user.id !== user.id) {
-      isFollowingUser = await isFollowing(ctx.user.id, user.id);
+      [isFollowingUser, isFollowedByUser] = await Promise.all([
+        isFollowing(ctx.user.id, user.id),
+        isFollowing(user.id, ctx.user.id)
+      ]);
     }
     return {
       id: user.id,
@@ -1236,6 +1240,7 @@ var usersRouter = router({
       followingCount,
       postsCount,
       isFollowing: isFollowingUser,
+      isFollowedBy: isFollowedByUser,
       isOwner: ctx.user?.id === user.id
     };
   }),
@@ -1248,8 +1253,12 @@ var usersRouter = router({
       getPostsCount(user.id)
     ]);
     let isFollowingUser = false;
+    let isFollowedByUser = false;
     if (ctx.user && ctx.user.id !== user.id) {
-      isFollowingUser = await isFollowing(ctx.user.id, user.id);
+      [isFollowingUser, isFollowedByUser] = await Promise.all([
+        isFollowing(ctx.user.id, user.id),
+        isFollowing(user.id, ctx.user.id)
+      ]);
     }
     return {
       id: user.id,
@@ -1261,6 +1270,7 @@ var usersRouter = router({
       followingCount,
       postsCount,
       isFollowing: isFollowingUser,
+      isFollowedBy: isFollowedByUser,
       isOwner: ctx.user?.id === user.id
     };
   }),
@@ -1315,8 +1325,12 @@ var usersRouter = router({
       getPostsCount(user.id)
     ]);
     let isFollowingUser = false;
+    let isFollowedByUser = false;
     if (ctx.user && ctx.user.id !== user.id) {
-      isFollowingUser = await isFollowing(ctx.user.id, user.id);
+      [isFollowingUser, isFollowedByUser] = await Promise.all([
+        isFollowing(ctx.user.id, user.id),
+        isFollowing(user.id, ctx.user.id)
+      ]);
     }
     return {
       id: user.id,
@@ -1327,7 +1341,8 @@ var usersRouter = router({
       followersCount,
       followingCount,
       postsCount,
-      isFollowing: isFollowingUser
+      isFollowing: isFollowingUser,
+      isFollowedBy: isFollowedByUser
     };
   })
 });
