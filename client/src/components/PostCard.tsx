@@ -303,13 +303,12 @@ export function PostCard({ post, onDeleted, onUpdated }: PostCardProps) {
 
         {/* Image */}
         <div
-          className="w-full bg-muted overflow-hidden relative cursor-pointer"
-          style={{ aspectRatio: "4/5" }}
+          className="relative flex w-full cursor-pointer items-center justify-center overflow-hidden bg-black"
           onDoubleClick={handleDoubleClick}
           onClick={() => navigate(`/post/${post.id}`)}
         >
           {imageFailed ? (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <div className="flex min-h-80 w-full flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
               <ImageOff size={32} />
               <span className="text-sm font-medium">Imagem indisponível</span>
             </div>
@@ -317,7 +316,7 @@ export function PostCard({ post, onDeleted, onUpdated }: PostCardProps) {
             <img
               src={post.imageUrl}
               alt=""
-              className="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-500 ease-out"
+              className="block max-h-[78vh] w-full object-contain object-center"
               loading="lazy"
               onError={() => setImageFailed(true)}
             />
