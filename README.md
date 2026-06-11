@@ -193,6 +193,38 @@ Google: https://reactgramm.onrender.com/api/auth/google/callback
 GitHub: https://reactgramm.onrender.com/api/auth/github/callback
 ```
 
+## Deploy na Vercel
+
+O repositório inclui `vercel.json` e uma função serverless em `api/index.ts`.
+Ao importar o projeto na Vercel, mantenha o diretório raiz como `./`. As
+configurações de build, saída e rotas serão lidas automaticamente.
+
+Adicione estas variáveis em **Settings > Environment Variables**:
+
+```env
+DATABASE_URL=...
+JWT_SECRET=...
+ADMIN_USERNAMES=...
+ADMIN_EMAILS=...
+STORAGE_API_URL=...
+STORAGE_API_KEY=...
+BLOB_READ_WRITE_TOKEN=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+```
+
+Para uploads persistentes na Vercel, crie um Blob Store no projeto. A variável
+`BLOB_READ_WRITE_TOKEN` será adicionada automaticamente pela integração.
+
+As URLs de callback devem usar o domínio de produção da Vercel:
+
+```txt
+Google: https://SEU-DOMINIO.vercel.app/api/auth/google/callback
+GitHub: https://SEU-DOMINIO.vercel.app/api/auth/github/callback
+```
+
 ## Autenticação
 
 O ReactGram suporta três formas de entrada:

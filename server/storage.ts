@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { put } from "@vercel/blob";
 import fs from "node:fs";
 import path from "node:path";
 import { ENV } from "./_core/env";
@@ -45,6 +46,16 @@ export async function storagePut(
 ): Promise<{ key: string; url: string }> {
   const { serviceUrl, serviceKey, isLocal } = getStorageConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
+
+  if (ENV.vercelBlobToken) {
+    const body = typeof data === "string" ? data : Buffer.from(data);
+    const blob = await put(key, body, {
+      access: "public",
+      contentType,
+      token: ENV.vercelBlobToken,
+    });
+    return { key, url: blob.url };
+  }
 
   if (isLocal) {
     if (ENV.isProduction) {
