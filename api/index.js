@@ -120,15 +120,36 @@ var ENV = {
 
 // server/db.ts
 var _db = null;
+function getDatabaseUrl() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString || !process.env.VERCEL) return connectionString;
+  try {
+    const url = new URL(connectionString);
+    if (/^dpg-[a-z0-9]+-a$/.test(url.hostname)) {
+      url.hostname = `${url.hostname}.ohio-postgres.render.com`;
+      url.searchParams.set("sslmode", "require");
+      return url.toString();
+    }
+  } catch {
+    return connectionString;
+  }
+  return connectionString;
+}
 async function getDb() {
   if (!_db) {
-    const connectionString = process.env.DATABASE_URL;
+    const connectionString = getDatabaseUrl();
     if (!connectionString) {
       console.error("[Database] DATABASE_URL is not defined in .env file");
       return null;
     }
     try {
-      _db = drizzle(postgres(connectionString, { max: 5 }));
+      _db = drizzle(
+        postgres(connectionString, {
+          max: process.env.VERCEL ? 1 : 5,
+          connect_timeout: 10,
+          idle_timeout: 20
+        })
+      );
     } catch (error) {
       console.error("[Database] Failed to connect:", error);
       _db = null;
