@@ -7,7 +7,9 @@ import { ENV } from "./env";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 
-const databaseReady = ensureDatabaseSchema();
+ensureDatabaseSchema().catch((error) => {
+  console.error("[Database] Schema initialization failed:", error);
+});
 
 export function createApp() {
   const app = express();
@@ -15,16 +17,6 @@ export function createApp() {
   app.set("trust proxy", 1);
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
-  app.use(async (_req, res, next) => {
-    try {
-      await databaseReady;
-      next();
-    } catch (error) {
-      console.error("[Database] Schema initialization failed:", error);
-      res.status(503).json({ error: "Database unavailable" });
-    }
-  });
 
   const storageKey = ENV.storageApiKey;
   const isLocalStorage =
