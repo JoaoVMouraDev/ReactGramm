@@ -1,4 +1,4 @@
-# ReactGram
+# 🚀 ReactGram
 
 Plataforma social full stack desenvolvida com React, TypeScript, Node.js e PostgreSQL.
 ReactGramm é uma plataforma social full stack inspirada em redes sociais modernas, permitindo publicação de imagens, interação entre usuários, notificações e gerenciamento de perfis.
@@ -15,7 +15,7 @@ ReactGramm é uma plataforma social full stack inspirada em redes sociais modern
 - Mais de 15 deploys realizados
 - Projeto em evolução contínua
 
-## Funcionalidades
+## ✨ Funcionalidades
 
 - Cadastro e login com email e senha
 - Feed com carregamento incremental
@@ -42,7 +42,7 @@ Durante o desenvolvimento do ReactGramm, alguns dos principais desafios foram:
 - Busca por usuários e hashtags
 - Deploy Full Stack utilizando Vercel
 
-## Tecnologias
+## 🛠 Tecnologias
 
 - React 19, TypeScript, Vite e Tailwind CSS
 - tRPC, TanStack Query e Express
@@ -73,7 +73,7 @@ Infraestrutura:
 
 ## 🛣 Roadmap
 
-### Concluído
+### ✅ Concluído
 - [x] Autenticação
 - [x] Curtidas
 - [x] Comentários
@@ -82,49 +82,38 @@ Infraestrutura:
 - [x] Hashtags
 - [x] Menções (@)
 
-### Em desenvolvimento
+### 🔄 Em desenvolvimento
 - [ ] Chat em tempo real
 - [ ] Notificações em tempo real
 
-## Estrutura
+## ☁️ Deploy
 
-```txt
-client/       Interface React
-server/       API, autenticação, banco e storage
-drizzle/      Schema e migrações PostgreSQL
-shared/       Tipos e constantes compartilhadas
-api/          Entrada serverless da Vercel
-```
+O projeto está configurado para a Vercel pelo arquivo vercel.json.
 
-## Deploy
+## 📸 Pré-visualização
 
-O projeto está configurado para a Vercel pelo arquivo `vercel.json`.
+Imagens da aplicação disponíveis abaixo.
 
-Variáveis obrigatórias em produção:
-
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `BLOB_READ_WRITE_TOKEN`
-
-Após adicionar as variáveis, faça um novo deploy. As novas imagens são enviadas ao Vercel Blob e os dados sociais permanecem no PostgreSQL.
-
-## Pré-visualização
-
+Tela de Feed:
 <img width="811" height="648" alt="FEED" src="https://github.com/user-attachments/assets/7d802e23-869d-4aea-a988-a5a2f8f01c67" />
 <br>
+
+Tela de Perfil:
 <img width="1070" height="597" alt="PERFIL" src="https://github.com/user-attachments/assets/98fd7c73-7aa6-4a6c-9268-5fc5389eeab9" />
 <br>
+
+Tela de Seguidores/Seguindo
 <img width="1158" height="645" alt="SEGUIDORES" src="https://github.com/user-attachments/assets/4d609b2c-ed9b-41e0-9973-0a1d3433dfde" />
 <br>
+
+Tela de Postagem:
 <img width="1156" height="652" alt="POSTAGEM" src="https://github.com/user-attachments/assets/45ed525e-374a-47f4-b466-3f250180c0fb" />
 <br>
+
+Tela de Edição de Post:
 <img width="798" height="647" alt="EDIÇÃO DE POST" src="https://github.com/user-attachments/assets/ab02a822-ce3b-4cc1-9db7-19721772a5d3" />
 <br>
 
-
-
-
-
-## Licença
+## 📄 Licença
 
 MIT
