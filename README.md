@@ -1,8 +1,19 @@
 # ReactGram
 
-ReactGram é uma rede social de fotos construída com React, tRPC, Express e PostgreSQL.
+Plataforma social full stack desenvolvida com React, TypeScript, Node.js e PostgreSQL.
+ReactGramm é uma plataforma social full stack inspirada em redes sociais modernas, permitindo publicação de imagens, interação entre usuários, notificações e gerenciamento de perfis.
 
-Produção: [https://react-gramm.vercel.app](https://react-gramm.vercel.app)
+🔗 Link: [https://react-gramm.vercel.app](https://react-gramm.vercel.app)
+
+## 📊 Projeto
+
+- Aplicação Full Stack publicada em produção
+- Autenticação de usuários
+- Upload persistente de imagens
+- Sistema social completo
+- Deploy automatizado
+- Mais de 15 deploys realizados
+- Projeto em evolução contínua
 
 ## Funcionalidades
 
@@ -19,6 +30,18 @@ Produção: [https://react-gramm.vercel.app](https://react-gramm.vercel.app)
 - Tema claro e escuro
 - Interface responsiva
 
+## 🚀 Desafios Técnicos
+
+Durante o desenvolvimento do ReactGramm, alguns dos principais desafios foram:
+
+- Migração de MongoDB para PostgreSQL
+- Persistência de imagens utilizando Vercel Blob
+- Sistema de autenticação com JWT
+- Implementação de notificações sociais
+- Sistema de seguidores e relacionamentos entre usuários
+- Busca por usuários e hashtags
+- Deploy Full Stack utilizando Vercel
+
 ## Tecnologias
 
 - React 19, TypeScript, Vite e Tailwind CSS
@@ -27,44 +50,41 @@ Produção: [https://react-gramm.vercel.app](https://react-gramm.vercel.app)
 - Vercel Blob para novas imagens
 - Vitest
 
-## Configuração local
+## 🏗 Arquitetura
 
-```bash
-git clone https://github.com/JoaoVMouraDev/ReactGramm.git
-cd ReactGramm
-npm install
-```
+Frontend:
+- React 19
+- TypeScript
+- TanStack Query
+- Tailwind CSS
 
-Crie um arquivo `.env`:
+Backend:
+- Express
+- tRPC
+- JWT
 
-```env
-DATABASE_URL=postgresql://usuario:senha@host:porta/database
-JWT_SECRET=uma_chave_segura
-BLOB_READ_WRITE_TOKEN=
-ADMIN_USERNAMES=
-ADMIN_EMAILS=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-```
+Banco de Dados:
+- PostgreSQL
+- Drizzle ORM
 
-Prepare o banco e inicie o projeto:
+Infraestrutura:
+- Vercel
+- Vercel Blob
 
-```bash
-npm run db:push
-npm run dev
-```
+## 🛣 Roadmap
 
-## Scripts
+### Concluído
+- [x] Autenticação
+- [x] Curtidas
+- [x] Comentários
+- [x] Seguidores
+- [x] Notificações
+- [x] Hashtags
+- [x] Menções (@)
 
-| Comando | Descrição |
-| --- | --- |
-| `npm run dev` | Inicia o ambiente de desenvolvimento |
-| `npm run build` | Gera o build de produção |
-| `npm run check` | Valida os tipos TypeScript |
-| `npm test` | Executa os testes |
-| `npm run db:push` | Sincroniza o schema do banco |
+### Em desenvolvimento
+- [ ] Chat em tempo real
+- [ ] Notificações em tempo real
 
 ## Estrutura
 
@@ -87,6 +107,8 @@ Variáveis obrigatórias em produção:
 - `BLOB_READ_WRITE_TOKEN`
 
 Após adicionar as variáveis, faça um novo deploy. As novas imagens são enviadas ao Vercel Blob e os dados sociais permanecem no PostgreSQL.
+
+## Pré-visualização
 
 <img width="811" height="648" alt="FEED" src="https://github.com/user-attachments/assets/7d802e23-869d-4aea-a988-a5a2f8f01c67" />
 <br>
