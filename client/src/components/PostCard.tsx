@@ -19,6 +19,7 @@ import { CommentsDrawer } from "./CommentsDrawer";
 import { UserHoverCard } from "./UserHoverCard";
 import { EditPostModal } from "./EditPostModal";
 import { ImageLightbox } from "./ImageLightbox";
+import { MentionText } from "./MentionText";
 
 interface PostCardProps {
   post: {
@@ -391,11 +392,14 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
               >
                 {username}
               </button>
-              <span className="text-foreground/80">
-                {isCaptionExpanded || post.caption.length <= 100 
-                  ? post.caption 
-                  : `${post.caption.substring(0, 100)}... `}
-              </span>
+              <MentionText
+                text={
+                  isCaptionExpanded || post.caption.length <= 100
+                    ? post.caption
+                    : `${post.caption.substring(0, 100)}... `
+                }
+                className="text-foreground/80"
+              />
               {post.caption.length > 100 && !isCaptionExpanded && (
                 <button
                   onClick={() => setIsCaptionExpanded(true)}
@@ -439,9 +443,7 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
                   >
                     {commentUsername}
                   </button>
-                  <span className="text-foreground/80 wrap-break-word">
-                    {comment.text}
-                  </span>
+                  <MentionText text={comment.text} className="text-foreground/80 wrap-break-word" />
                 </p>
               );
             })}

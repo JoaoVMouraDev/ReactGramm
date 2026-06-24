@@ -2,9 +2,11 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { Loader2, Send, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { MentionText } from "./MentionText";
+import { MentionTextarea } from "./MentionTextarea";
 
 interface CommentsDrawerProps {
   postId: number;
@@ -22,7 +24,6 @@ export function CommentsDrawer({
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [text, setText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
   const { data: comments, isLoading } = trpc.comments.getByPost.useQuery(
@@ -46,7 +47,6 @@ export function CommentsDrawer({
 
   useEffect(() => {
     if (open) {
-      setTimeout(() => inputRef.current && (inputRef.current as any).focus(), 100);
       (globalThis as any).document?.body?.style && ((globalThis as any).document.body.style.overflow = "hidden");
     } else {
       (globalThis as any).document?.body?.style && ((globalThis as any).document.body.style.overflow = "");
@@ -129,7 +129,9 @@ export function CommentsDrawer({
                   <div className="flex-1 min-w-0">
                     <div className="bg-muted rounded-xl px-3 py-2">
                       <p className="text-xs font-semibold mb-0.5">{uname}</p>
-                      <p className="text-sm wrap-break-word">{comment.text}</p>
+                      <p className="text-sm wrap-break-word">
+                        <MentionText text={comment.text} onMentionClick={onClose} />
+                      </p>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 px-1">
                       {new Date(comment.createdAt).toLocaleDateString("pt-BR")}
@@ -160,20 +162,20 @@ export function CommentsDrawer({
                   )}
                 </div>
               </div>
-              <input
-                ref={inputRef}
-                type="text"
+              <MentionTextarea
                 placeholder="Adicione um comentário..."
                 value={text}
-                onChange={(e) => setText((e.target as any).value)}
+                onChange={setText}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     handleSubmit();
                   }
                 }}
-                className="flex-1 bg-muted rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                rows={1}
+                className="flex-1 bg-muted rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none min-h-10 max-h-24"
                 disabled={createMutation.isPending}
+                autoFocus
               />
               <button
                 onClick={handleSubmit}

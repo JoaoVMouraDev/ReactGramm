@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { Hash, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { MentionTextarea } from "./MentionTextarea";
 
 interface EditPostModalProps {
   post: {
@@ -66,9 +67,9 @@ export function EditPostModal({ post, onClose, onSaved }: EditPostModalProps) {
         <div className="space-y-5 px-5 py-5">
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Legenda</label>
-            <textarea
+            <MentionTextarea
               value={caption}
-              onChange={(event) => setCaption(event.target.value)}
+              onChange={setCaption}
               maxLength={2200}
               rows={5}
               className="w-full resize-none rounded-lg bg-muted px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"

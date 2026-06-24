@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { MobileNav, Navbar } from "@/components/Navbar";
+import { MentionTextarea } from "@/components/MentionTextarea";
 
 export default function UploadPost() {
   const [, navigate] = useLocation();
@@ -184,9 +185,9 @@ export default function UploadPost() {
         {/* Caption */}
         <div className="mt-4 space-y-1.5">
           <label className="text-sm font-medium">Legenda</label>
-          <textarea
+          <MentionTextarea
             value={caption}
-            onChange={(e) => setCaption((e.target as any).value)}
+            onChange={setCaption}
             placeholder="Escreva uma legenda..."
             maxLength={2200}
             rows={4}
