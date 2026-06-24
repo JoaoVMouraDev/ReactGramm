@@ -87,12 +87,14 @@ export const comments = pgTable(
     userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    parentCommentId: integer("parentCommentId"),
     text: text("text").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => [
     index("comments_postId_idx").on(table.postId),
     index("comments_userId_idx").on(table.userId),
+    index("comments_parentCommentId_idx").on(table.parentCommentId),
   ]
 );
 

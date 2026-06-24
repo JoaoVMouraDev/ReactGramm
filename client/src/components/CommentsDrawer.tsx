@@ -1,8 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
 import { Loader2, Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { MentionText } from "./MentionText";
@@ -15,6 +14,25 @@ interface CommentsDrawerProps {
   onCommentAdded?: () => void;
 }
 
+type CommentItem = {
+  id: number;
+  postId: number;
+  userId: number;
+  parentCommentId?: number | null;
+  text: string;
+  createdAt: Date | string;
+  user?: {
+    id: number;
+    username?: string | null;
+    name?: string | null;
+    avatarUrl?: string | null;
+  };
+};
+
+function getDisplayName(comment: CommentItem) {
+  return comment.user?.username ?? comment.user?.name ?? "usuário";
+}
+
 export function CommentsDrawer({
   postId,
   open,
@@ -24,16 +42,18 @@ export function CommentsDrawer({
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
   const utils = trpc.useUtils();
 
   const { data: comments, isLoading } = trpc.comments.getByPost.useQuery(
     { postId, limit: 50, offset: 0 },
-    { enabled: open && !!postId }
+    { enabled: open && !!postId },
   );
 
   const createMutation = trpc.comments.create.useMutation({
     onSuccess: () => {
       setText("");
+      setReplyTo(null);
       utils.comments.getByPost.invalidate();
       onCommentAdded?.();
     },
@@ -41,18 +61,37 @@ export function CommentsDrawer({
       if (err.data?.code === "UNAUTHORIZED") {
         toast.error("Sua sessão expirou. Por favor, faça login novamente.");
         navigate("/login");
-      } else toast.error("Erro ao comentar");
+      } else {
+        toast.error(err.message || "Erro ao comentar");
+      }
     },
   });
 
+  const { rootComments, repliesByParent } = useMemo(() => {
+    const replies = new Map<number, CommentItem[]>();
+    const roots: CommentItem[] = [];
+
+    for (const comment of (comments ?? []) as CommentItem[]) {
+      if (comment.parentCommentId) {
+        const current = replies.get(comment.parentCommentId) ?? [];
+        current.push(comment);
+        replies.set(comment.parentCommentId, current);
+      } else {
+        roots.push(comment);
+      }
+    }
+
+    return { rootComments: roots, repliesByParent: replies };
+  }, [comments]);
+
   useEffect(() => {
     if (open) {
-      (globalThis as any).document?.body?.style && ((globalThis as any).document.body.style.overflow = "hidden");
+      document.body.style.overflow = "hidden";
     } else {
-      (globalThis as any).document?.body?.style && ((globalThis as any).document.body.style.overflow = "");
+      document.body.style.overflow = "";
     }
     return () => {
-      (globalThis as any).document?.body?.style && ((globalThis as any).document.body.style.overflow = "");
+      document.body.style.overflow = "";
     };
   }, [open]);
 
@@ -62,21 +101,42 @@ export function CommentsDrawer({
       return;
     }
     if (!text.trim()) return;
-    createMutation.mutate({ postId, text: text.trim() });
+    createMutation.mutate({
+      postId,
+      text: text.trim(),
+      parentCommentId: replyTo?.id,
+    });
+  };
+
+  const handleReply = (comment: CommentItem) => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    const username = getDisplayName(comment);
+    setReplyTo(comment);
+    setText((current) => {
+      const mention = `@${username} `;
+      return current.trim() ? current : mention;
+    });
+  };
+
+  const goToProfile = (comment: CommentItem) => {
+    navigate(`/profile/${comment.user?.username ?? comment.userId}`);
+    onClose();
   };
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
-      {/* Panel */}
+
       <div className="relative w-full sm:max-w-md bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh] animate-fade-in">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <h3 className="font-semibold text-base">Comentários</h3>
           <button
@@ -87,107 +147,173 @@ export function CommentsDrawer({
           </button>
         </div>
 
-        {/* Comments list */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-muted-foreground" size={24} />
             </div>
-          ) : !comments || comments.length === 0 ? (
+          ) : rootComments.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground text-sm">Nenhum comentário ainda.</p>
               <p className="text-muted-foreground text-xs mt-1">Seja o primeiro a comentar!</p>
             </div>
           ) : (
-            comments.map((comment: any) => {
-              const uname = comment.user?.username ?? comment.user?.name ?? "usuário";
+            rootComments.map((comment) => {
+              const username = getDisplayName(comment);
+              const replies = repliesByParent.get(comment.id) ?? [];
+
               return (
-                <div key={comment.id} className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      navigate(`/profile/${comment.user?.username ?? comment.userId}`);
-                      onClose();
-                    }}
-                    className="shrink-0"
-                  >
-                    <div className="w-8 h-8 rounded-full ig-gradient p-0.5">
-                      <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
-                        {comment.user?.avatarUrl ? (
-                          <img
-                            src={comment.user.avatarUrl}
-                            alt={uname}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs font-bold text-foreground">
-                            {uname[0]?.toUpperCase()}
-                          </span>
-                        )}
+                <div key={comment.id} className="space-y-2">
+                  <div className="flex gap-3">
+                    <button onClick={() => goToProfile(comment)} className="shrink-0">
+                      <div className="w-8 h-8 rounded-full ig-gradient p-0.5">
+                        <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
+                          {comment.user?.avatarUrl ? (
+                            <img
+                              src={comment.user.avatarUrl}
+                              alt={username}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xs font-bold text-foreground">
+                              {username[0]?.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <div className="bg-muted rounded-xl px-3 py-2">
-                      <p className="text-xs font-semibold mb-0.5">{uname}</p>
-                      <p className="text-sm wrap-break-word">
-                        <MentionText text={comment.text} onMentionClick={onClose} />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="bg-muted rounded-xl px-3 py-2">
+                        <p className="text-xs font-semibold mb-0.5">{username}</p>
+                        <p className="text-sm wrap-break-word">
+                          <MentionText text={comment.text} onMentionClick={onClose} />
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 px-1 flex items-center gap-3">
+                        <span>{new Date(comment.createdAt).toLocaleDateString("pt-BR")}</span>
+                        <button
+                          onClick={() => handleReply(comment)}
+                          className="font-semibold hover:text-foreground"
+                        >
+                          Responder
+                        </button>
                       </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1 px-1">
-                      {new Date(comment.createdAt).toLocaleDateString("pt-BR")}
-                    </p>
                   </div>
+
+                  {replies.length > 0 && (
+                    <div className="ml-11 space-y-2 border-l border-border pl-3">
+                      {replies.map((reply) => {
+                        const replyName = getDisplayName(reply);
+
+                        return (
+                          <div key={reply.id} className="flex gap-2">
+                            <button onClick={() => goToProfile(reply)} className="shrink-0">
+                              <div className="w-6 h-6 rounded-full ig-gradient p-0.5">
+                                <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
+                                  {reply.user?.avatarUrl ? (
+                                    <img
+                                      src={reply.user.avatarUrl}
+                                      alt={replyName}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-foreground">
+                                      {replyName[0]?.toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="bg-muted/70 rounded-xl px-3 py-2">
+                                <p className="text-xs font-semibold mb-0.5">{replyName}</p>
+                                <p className="text-sm wrap-break-word">
+                                  <MentionText text={reply.text} onMentionClick={onClose} />
+                                </p>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1 px-1 flex items-center gap-3">
+                                <span>{new Date(reply.createdAt).toLocaleDateString("pt-BR")}</span>
+                                <button
+                                  onClick={() => handleReply(comment)}
+                                  className="font-semibold hover:text-foreground"
+                                >
+                                  Responder
+                                </button>
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })
           )}
         </div>
 
-        {/* Input */}
         <div className="px-4 py-3 border-t border-border shrink-0">
           {user ? (
-            <div className="flex gap-2 items-center">
-              <div className="w-8 h-8 rounded-full ig-gradient p-0.5 shrink-0">
-                <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
-                  {user.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-xs font-bold text-foreground">
-                      {(user.username ?? user.name ?? "?")[0]?.toUpperCase()}
-                    </span>
-                  )}
+            <div className="space-y-2">
+              {replyTo && (
+                <div className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  <span>Respondendo @{getDisplayName(replyTo)}</span>
+                  <button
+                    onClick={() => {
+                      setReplyTo(null);
+                      setText("");
+                    }}
+                    className="font-semibold hover:text-foreground"
+                  >
+                    Cancelar
+                  </button>
                 </div>
+              )}
+
+              <div className="flex gap-2 items-center">
+                <div className="w-8 h-8 rounded-full ig-gradient p-0.5 shrink-0">
+                  <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
+                    {user.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-foreground">
+                        {(user.username ?? user.name ?? "?")[0]?.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <MentionTextarea
+                  placeholder={replyTo ? "Escreva uma resposta..." : "Adicione um comentário..."}
+                  value={text}
+                  onChange={setText}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
+                  rows={1}
+                  className="flex-1 bg-muted rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none min-h-10 max-h-24"
+                  disabled={createMutation.isPending}
+                  autoFocus
+                />
+                <button
+                  onClick={handleSubmit}
+                  disabled={!text.trim() || createMutation.isPending}
+                  className="p-2 rounded-full ig-gradient text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                >
+                  {createMutation.isPending ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Send size={16} />
+                  )}
+                </button>
               </div>
-              <MentionTextarea
-                placeholder="Adicione um comentário..."
-                value={text}
-                onChange={setText}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit();
-                  }
-                }}
-                rows={1}
-                className="flex-1 bg-muted rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none min-h-10 max-h-24"
-                disabled={createMutation.isPending}
-                autoFocus
-              />
-              <button
-                onClick={handleSubmit}
-                disabled={!text.trim() || createMutation.isPending}
-                className="p-2 rounded-full ig-gradient text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-              >
-                {createMutation.isPending ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Send size={16} />
-                )}
-              </button>
             </div>
           ) : (
             <button

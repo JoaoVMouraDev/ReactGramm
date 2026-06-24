@@ -217,11 +217,18 @@ const likesRouter = router({
 
 const commentsRouter = router({
   create: protectedProcedure
-    .input(z.object({ postId: z.number(), text: z.string().min(1).max(500) }))
+    .input(
+      z.object({
+        postId: z.number(),
+        text: z.string().min(1).max(500),
+        parentCommentId: z.number().optional(),
+      })
+    )
     .mutation(async ({ input, ctx }) => {
       const id = await createComment({
         postId: input.postId,
         userId: ctx.user.id,
+        parentCommentId: input.parentCommentId ?? null,
         text: input.text,
       });
       return { id };

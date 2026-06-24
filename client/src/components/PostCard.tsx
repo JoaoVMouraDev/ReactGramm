@@ -207,7 +207,9 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
 
   const username = post.user?.username ?? post.user?.name ?? "usuário";
   const avatarLetter = username[0]?.toUpperCase() ?? "?";
-  const visibleComments = (previewComments ?? []).slice(-3);
+  const visibleComments = (previewComments ?? [])
+    .filter((comment: any) => !comment.parentCommentId)
+    .slice(-3);
 
   return (
     <>

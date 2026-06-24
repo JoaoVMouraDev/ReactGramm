@@ -125,9 +125,26 @@ export async function ensureDatabaseSchema(): Promise<void> {
       id serial PRIMARY KEY,
       "postId" integer NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
       "userId" integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "parentCommentId" integer REFERENCES comments(id) ON DELETE CASCADE,
       text text NOT NULL,
       "createdAt" timestamp NOT NULL DEFAULT now()
     );
+  `);
+
+  await db.execute(sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS "parentCommentId" integer;`);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'comments_parentCommentId_comments_id_fk'
+      ) THEN
+        ALTER TABLE comments
+          ADD CONSTRAINT "comments_parentCommentId_comments_id_fk"
+          FOREIGN KEY ("parentCommentId") REFERENCES comments(id) ON DELETE CASCADE;
+      END IF;
+    END $$;
   `);
 
   await db.execute(sql`
@@ -145,6 +162,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "likes_userId_idx" ON likes ("userId");`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_postId_idx" ON comments ("postId");`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_userId_idx" ON comments ("userId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_parentCommentId_idx" ON comments ("parentCommentId");`);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "follows_follower_following_unique" ON follows ("followerId", "followingId");`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "follows_followerId_idx" ON follows ("followerId");`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "follows_followingId_idx" ON follows ("followingId");`);
@@ -626,6 +644,16 @@ export async function getUserLikedPostIds(
 export async function createComment(data: InsertComment): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
+  if (data.parentCommentId) {
+    const [parent] = await db
+      .select({ id: comments.id })
+      .from(comments)
+      .where(and(eq(comments.id, data.parentCommentId), eq(comments.postId, data.postId)))
+      .limit(1);
+
+    if (!parent) throw new Error("Comentário original não encontrado");
+  }
+
   const [created] = await db
     .insert(comments)
     .values(data)
@@ -643,6 +671,7 @@ export async function getCommentsByPost(
       id: comments.id,
       postId: comments.postId,
       userId: comments.userId,
+      parentCommentId: comments.parentCommentId,
       text: comments.text,
       createdAt: comments.createdAt,
       user: USER_SELECT,
