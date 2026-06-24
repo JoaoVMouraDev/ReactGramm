@@ -101,6 +101,28 @@ export const comments = pgTable(
 export type Comment = typeof comments.$inferSelect;
 export type InsertComment = typeof comments.$inferInsert;
 
+export const commentLikes = pgTable(
+  "comment_likes",
+  {
+    id: serial("id").primaryKey(),
+    commentId: integer("commentId")
+      .notNull()
+      .references(() => comments.id, { onDelete: "cascade" }),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("comment_likes_commentId_userId_unique").on(table.commentId, table.userId),
+    index("comment_likes_commentId_idx").on(table.commentId),
+    index("comment_likes_userId_idx").on(table.userId),
+  ]
+);
+
+export type CommentLike = typeof commentLikes.$inferSelect;
+export type InsertCommentLike = typeof commentLikes.$inferInsert;
+
 export const follows = pgTable(
   "follows",
   {

@@ -18,6 +18,7 @@ import {
   getUserPosts,
   isFollowing,
   searchUsers,
+  toggleCommentLike,
   toggleFollow,
   toggleLike,
   updatePost,
@@ -242,8 +243,14 @@ const commentsRouter = router({
         offset: z.number().default(0),
       })
     )
-    .query(async ({ input }) => {
-      return getCommentsByPost(input.postId);
+    .query(async ({ input, ctx }) => {
+      return getCommentsByPost(input.postId, ctx.user?.id);
+    }),
+
+  toggleLike: protectedProcedure
+    .input(z.object({ commentId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      return toggleCommentLike(ctx.user.id, input.commentId);
     }),
 });
 

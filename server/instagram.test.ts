@@ -93,6 +93,7 @@ vi.mock("./db", () => ({
   getLikesByPost: vi.fn(async () => []),
   createComment: vi.fn(async () => 99),
   getCommentsByPost: vi.fn(async () => []),
+  toggleCommentLike: vi.fn(async () => ({ liked: true })),
   getNotificationsForUser: vi.fn(async () => []),
   toggleFollow: vi.fn(async () => ({ following: true })),
   isFollowing: vi.fn(async () => false),
@@ -262,6 +263,17 @@ describe("comments", () => {
     const caller = appRouter.createCaller(createPublicCtx());
     const result = await caller.comments.getByPost({ postId: 1, limit: 10, offset: 0 });
     expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("toggle comment like requires authentication", async () => {
+    const caller = appRouter.createCaller(createPublicCtx());
+    await expect(caller.comments.toggleLike({ commentId: 1 })).rejects.toThrow();
+  });
+
+  it("toggle comment like returns liked status", async () => {
+    const caller = appRouter.createCaller(createAuthCtx());
+    const result = await caller.comments.toggleLike({ commentId: 1 });
+    expect(typeof result.liked).toBe("boolean");
   });
 });
 

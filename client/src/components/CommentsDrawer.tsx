@@ -1,6 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Send, X } from "lucide-react";
+import { Heart, Loader2, Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -20,6 +20,8 @@ type CommentItem = {
   userId: number;
   parentCommentId?: number | null;
   text: string;
+  likesCount?: number;
+  isLiked?: boolean;
   createdAt: Date | string;
   user?: {
     id: number;
@@ -63,6 +65,20 @@ export function CommentsDrawer({
         navigate("/login");
       } else {
         toast.error(err.message || "Erro ao comentar");
+      }
+    },
+  });
+
+  const toggleLikeMutation = trpc.comments.toggleLike.useMutation({
+    onSuccess: () => {
+      utils.comments.getByPost.invalidate({ postId, limit: 50, offset: 0 });
+    },
+    onError: (err) => {
+      if (err.data?.code === "UNAUTHORIZED") {
+        toast.error("Faça login para curtir comentários");
+        navigate("/login");
+      } else {
+        toast.error(err.message || "Erro ao curtir comentário");
       }
     },
   });
@@ -120,6 +136,15 @@ export function CommentsDrawer({
       const mention = `@${username} `;
       return current.trim() ? current : mention;
     });
+  };
+
+  const handleLikeComment = (commentId: number) => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    if (toggleLikeMutation.isPending) return;
+    toggleLikeMutation.mutate({ commentId });
   };
 
   const goToProfile = (comment: CommentItem) => {
@@ -197,6 +222,15 @@ export function CommentsDrawer({
                         >
                           Responder
                         </button>
+                        <button
+                          onClick={() => handleLikeComment(comment.id)}
+                          className={`inline-flex items-center gap-1 font-semibold hover:text-foreground ${
+                            comment.isLiked ? "text-red-500" : ""
+                          }`}
+                        >
+                          <Heart size={12} fill={comment.isLiked ? "currentColor" : "none"} />
+                          {(comment.likesCount ?? 0) > 0 ? comment.likesCount : "Curtir"}
+                        </button>
                       </p>
                     </div>
                   </div>
@@ -239,6 +273,15 @@ export function CommentsDrawer({
                                   className="font-semibold hover:text-foreground"
                                 >
                                   Responder
+                                </button>
+                                <button
+                                  onClick={() => handleLikeComment(reply.id)}
+                                  className={`inline-flex items-center gap-1 font-semibold hover:text-foreground ${
+                                    reply.isLiked ? "text-red-500" : ""
+                                  }`}
+                                >
+                                  <Heart size={12} fill={reply.isLiked ? "currentColor" : "none"} />
+                                  {(reply.likesCount ?? 0) > 0 ? reply.likesCount : "Curtir"}
                                 </button>
                               </p>
                             </div>

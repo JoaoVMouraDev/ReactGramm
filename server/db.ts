@@ -12,6 +12,7 @@ import {
   Like,
   Post,
   User,
+  commentLikes,
   comments,
   follows,
   likes,
@@ -163,6 +164,19 @@ export async function ensureDatabaseSchema(): Promise<void> {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_postId_idx" ON comments ("postId");`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_userId_idx" ON comments ("userId");`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_parentCommentId_idx" ON comments ("parentCommentId");`);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS comment_likes (
+      id serial PRIMARY KEY,
+      "commentId" integer NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+      "userId" integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "createdAt" timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "comment_likes_commentId_userId_unique" ON comment_likes ("commentId", "userId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comment_likes_commentId_idx" ON comment_likes ("commentId");`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comment_likes_userId_idx" ON comment_likes ("userId");`);
+
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "follows_follower_following_unique" ON follows ("followerId", "followingId");`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "follows_followerId_idx" ON follows ("followerId");`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS "follows_followingId_idx" ON follows ("followingId");`);
@@ -662,8 +676,9 @@ export async function createComment(data: InsertComment): Promise<number> {
 }
 
 export async function getCommentsByPost(
-  postId: number
-): Promise<(Comment & { user: User })[]> {
+  postId: number,
+  currentUserId?: number
+): Promise<(Comment & { user: User; likesCount: number; isLiked: boolean })[]> {
   const db = await getDb();
   if (!db) return [];
   const result = await db
@@ -674,13 +689,41 @@ export async function getCommentsByPost(
       parentCommentId: comments.parentCommentId,
       text: comments.text,
       createdAt: comments.createdAt,
+      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${commentLikes} WHERE ${commentLikes.commentId} = ${comments.id}), 0) AS INTEGER)`,
+      isLiked: currentUserId
+        ? sql<boolean>`EXISTS(SELECT 1 FROM ${commentLikes} WHERE ${commentLikes.commentId} = ${comments.id} AND ${commentLikes.userId} = ${currentUserId})`
+        : sql<boolean>`false`,
       user: USER_SELECT,
     })
     .from(comments)
     .innerJoin(users, eq(comments.userId, users.id))
     .where(eq(comments.postId, postId))
     .orderBy(comments.createdAt);
-  return result as (Comment & { user: User })[];
+  return result as (Comment & { user: User; likesCount: number; isLiked: boolean })[];
+}
+
+export async function toggleCommentLike(
+  userId: number,
+  commentId: number
+): Promise<{ liked: boolean }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+
+  const existing = await db
+    .select()
+    .from(commentLikes)
+    .where(and(eq(commentLikes.userId, userId), eq(commentLikes.commentId, commentId)))
+    .limit(1);
+
+  if (existing.length > 0) {
+    await db
+      .delete(commentLikes)
+      .where(and(eq(commentLikes.userId, userId), eq(commentLikes.commentId, commentId)));
+    return { liked: false };
+  }
+
+  await db.insert(commentLikes).values({ userId, commentId });
+  return { liked: true };
 }
 
 export type AppNotification = {
