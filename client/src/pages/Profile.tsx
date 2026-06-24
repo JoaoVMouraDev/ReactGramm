@@ -15,6 +15,7 @@ import { MobileNav, Navbar } from "@/components/Navbar";
 import { PostCard } from "@/components/PostCard";
 import { EditProfileModal } from "@/components/EditProfileModal";
 import { FollowListModal } from "@/components/FollowListModal";
+import { LinkifiedText } from "@/components/LinkifiedText";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -210,7 +211,7 @@ export default function Profile() {
               )}
               {profile.bio && (
                 <p className="text-sm text-foreground/80 whitespace-pre-line mt-0.5">
-                  {profile.bio}
+                  <LinkifiedText text={profile.bio} />
                 </p>
               )}
             </div>
