@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
@@ -728,7 +729,7 @@ export async function toggleCommentLike(
 
 export type AppNotification = {
   id: string;
-  type: "follow" | "like" | "comment";
+  type: "follow" | "like" | "comment" | "reply" | "comment_like";
   actor: Pick<User, "id" | "username" | "name" | "avatarUrl">;
   postId: number | null;
   text: string | null;
@@ -741,8 +742,9 @@ export async function getNotificationsForUser(
 ): Promise<AppNotification[]> {
   const db = await getDb();
   if (!db) return [];
+  const parentComments = alias(comments, "parent_comments");
 
-  const [followEvents, likeEvents, commentEvents] = await Promise.all([
+  const [followEvents, likeEvents, commentEvents, replyEvents, commentLikeEvents] = await Promise.all([
     db
       .select({
         id: follows.id,
@@ -798,6 +800,53 @@ export async function getNotificationsForUser(
       .where(and(eq(posts.userId, userId), sql`${comments.userId} <> ${userId}`))
       .orderBy(desc(comments.createdAt))
       .limit(limit),
+
+    db
+      .select({
+        id: comments.id,
+        postId: comments.postId,
+        text: comments.text,
+        createdAt: comments.createdAt,
+        actor: {
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatarUrl: users.avatarUrl,
+        },
+      })
+      .from(comments)
+      .innerJoin(parentComments, eq(comments.parentCommentId, parentComments.id))
+      .innerJoin(posts, eq(comments.postId, posts.id))
+      .innerJoin(users, eq(comments.userId, users.id))
+      .where(
+        and(
+          eq(parentComments.userId, userId),
+          sql`${posts.userId} <> ${userId}`,
+          sql`${comments.userId} <> ${userId}`,
+        ),
+      )
+      .orderBy(desc(comments.createdAt))
+      .limit(limit),
+
+    db
+      .select({
+        id: commentLikes.id,
+        commentId: commentLikes.commentId,
+        postId: comments.postId,
+        createdAt: commentLikes.createdAt,
+        actor: {
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatarUrl: users.avatarUrl,
+        },
+      })
+      .from(commentLikes)
+      .innerJoin(comments, eq(commentLikes.commentId, comments.id))
+      .innerJoin(users, eq(commentLikes.userId, users.id))
+      .where(and(eq(comments.userId, userId), sql`${commentLikes.userId} <> ${userId}`))
+      .orderBy(desc(commentLikes.createdAt))
+      .limit(limit),
   ]);
 
   return [
@@ -823,6 +872,22 @@ export async function getNotificationsForUser(
       actor: event.actor,
       postId: event.postId,
       text: event.text,
+      createdAt: event.createdAt,
+    })),
+    ...replyEvents.map((event) => ({
+      id: `reply-${event.id}`,
+      type: "reply" as const,
+      actor: event.actor,
+      postId: event.postId,
+      text: event.text,
+      createdAt: event.createdAt,
+    })),
+    ...commentLikeEvents.map((event) => ({
+      id: `comment-like-${event.id}`,
+      type: "comment_like" as const,
+      actor: event.actor,
+      postId: event.postId,
+      text: null,
       createdAt: event.createdAt,
     })),
   ]

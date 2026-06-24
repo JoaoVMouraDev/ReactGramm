@@ -278,7 +278,7 @@ export function Navbar() {
                         const Icon =
                           notification.type === "follow"
                             ? UserPlus
-                            : notification.type === "like"
+                            : notification.type === "like" || notification.type === "comment_like"
                               ? Heart
                               : MessageCircle;
                         const actorName =
@@ -287,18 +287,26 @@ export function Navbar() {
                           "usuário";
                         const actorPath =
                           notification.actor.username ?? notification.actor.id;
-                        const title =
+                        let title =
                           notification.type === "follow"
                             ? "Novo seguidor"
                             : notification.type === "like"
                               ? "Nova curtida"
                               : "Novo comentário";
-                        const text =
+                        let text =
                           notification.type === "follow"
                             ? `${actorName} começou a seguir você`
                             : notification.type === "like"
                               ? `${actorName} curtiu sua foto`
                               : `${actorName} comentou na sua foto`;
+                        if (notification.type === "comment_like") {
+                          title = "Curtida no comentário";
+                          text = `${actorName} curtiu seu comentário`;
+                        } else if (notification.type === "reply") {
+                          title = "Nova resposta";
+                          text = `${actorName} respondeu seu comentário`;
+                        }
+
                         const target =
                           notification.type === "follow"
                             ? `/profile/${actorPath}`
