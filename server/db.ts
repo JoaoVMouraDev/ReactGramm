@@ -50,11 +50,16 @@ export async function getDb() {
       return null;
     }
     try {
+      const connectionUrl = new URL(connectionString);
+      const usesTransactionPooler =
+        connectionUrl.hostname.endsWith(".pooler.supabase.com") && connectionUrl.port === "6543";
+
       _db = drizzle(
         postgres(connectionString, {
           max: process.env.VERCEL ? 1 : 5,
           connect_timeout: 10,
           idle_timeout: 20,
+          prepare: !usesTransactionPooler,
         }),
       );
     } catch (error) {
