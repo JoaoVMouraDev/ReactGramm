@@ -364,7 +364,7 @@ export function Navbar() {
           )}
 
           {user ? (
-            <div ref={userMenuRef} className="relative">
+            <div ref={userMenuRef} className="relative hidden sm:block">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="p-1 rounded-full hover:opacity-80 transition-opacity"

@@ -164,14 +164,14 @@ export function CommentsDrawer({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      <div className="relative w-full sm:max-w-md bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh] animate-fade-in">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+      <div className="relative flex h-[88dvh] w-full flex-col bg-card shadow-2xl animate-fade-in sm:h-auto sm:max-h-[85vh] sm:w-[min(92vw,42rem)] sm:rounded-2xl">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
           <h3 className="font-semibold text-base">Comentários</h3>
           <button
             onClick={onClose}
@@ -181,7 +181,7 @@ export function CommentsDrawer({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 space-y-4 sm:px-5 sm:py-4">
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-muted-foreground" size={24} />
@@ -305,7 +305,7 @@ export function CommentsDrawer({
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-border shrink-0">
+        <div className="border-t border-border px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-5 sm:pb-4">
           {user ? (
             <div className="space-y-2">
               {replyTo && (
