@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Hash, Loader2 } from "lucide-react";
 import { useLocation, useParams } from "wouter";
-import { MobileNav, Navbar } from "@/components/Navbar";
+import { Navbar } from "@/components/Navbar";
 
 export default function HashtagPage() {
   const params = useParams<{ tag: string }>();
@@ -78,7 +78,6 @@ export default function HashtagPage() {
         )}
       </main>
 
-      <MobileNav />
     </div>
   );
 }

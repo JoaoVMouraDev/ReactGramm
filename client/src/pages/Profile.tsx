@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useParams } from "wouter";
-import { MobileNav, Navbar } from "@/components/Navbar";
+import { Navbar } from "@/components/Navbar";
 import { PostCard } from "@/components/PostCard";
 import { EditProfileModal } from "@/components/EditProfileModal";
 import { FollowListModal } from "@/components/FollowListModal";
@@ -74,7 +74,6 @@ export default function Profile() {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="animate-spin text-primary" size={32} />
         </div>
-        <MobileNav />
       </div>
     );
   }
@@ -87,7 +86,6 @@ export default function Profile() {
           <p className="text-lg font-semibold">Usuário não encontrado</p>
           <p className="text-sm text-muted-foreground">@{username}</p>
         </div>
-        <MobileNav />
       </div>
     );
   }
@@ -310,7 +308,6 @@ export default function Profile() {
         />
       ) : null}
 
-      <MobileNav />
     </div>
   );
 }

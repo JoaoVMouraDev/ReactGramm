@@ -364,7 +364,7 @@ export function Navbar() {
           )}
 
           {user ? (
-            <div ref={userMenuRef} className="relative hidden sm:block">
+            <div ref={userMenuRef} className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="p-1 rounded-full hover:opacity-80 transition-opacity"
@@ -423,62 +423,5 @@ export function Navbar() {
         </div>
       </div>
     </header>
-  );
-}
-
-export function MobileNav() {
-  const [location, navigate] = useLocation();
-  const { user } = useAuth();
-  const [commentsDrawerOpen, setCommentsDrawerOpen] = useState(false);
-
-  const items = [
-    { icon: Home, path: "/", label: "Início" },
-    { icon: Search, path: "/explore", label: "Explorar" },
-    ...(user ? [{ icon: PlusSquare, path: "/upload", label: "Novo post" }] : []),
-    ...(user
-      ? [
-          {
-            icon: User,
-            path: `/profile/${user.username ?? user.id}`,
-            label: "Perfil",
-          },
-        ]
-      : []),
-  ];
-
-  useEffect(() => {
-    const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
-      setCommentsDrawerOpen(Boolean(detail?.open));
-    };
-
-    window.addEventListener("commentsdrawerchange", handleChange as EventListener);
-    return () => window.removeEventListener("commentsdrawerchange", handleChange as EventListener);
-  }, []);
-
-  return (
-    <nav
-      className={`fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur border-t border-border sm:hidden ${
-        commentsDrawerOpen ? "hidden" : ""
-      }`}
-    >
-      <div className="flex items-center justify-around h-14 px-2">
-        {items.map((item) => {
-          const isActive = location === item.path;
-          return (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className={`flex flex-col items-center justify-center gap-0.5 p-2 rounded-lg transition-colors ${
-                isActive ? "text-primary" : "text-muted-foreground"
-              }`}
-              title={item.label}
-            >
-              <item.icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
-            </button>
-          );
-        })}
-      </div>
-    </nav>
   );
 }

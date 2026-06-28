@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useParams, useLocation } from "wouter";
-import { MobileNav, Navbar } from "@/components/Navbar";
+import { Navbar } from "@/components/Navbar";
 import { PostCard } from "@/components/PostCard";
 
 export default function PostDetail() {
@@ -49,7 +49,6 @@ export default function PostDetail() {
         )}
       </main>
 
-      <MobileNav />
     </div>
   );
 }

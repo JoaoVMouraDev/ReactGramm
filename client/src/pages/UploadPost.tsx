@@ -5,7 +5,7 @@ import { ArrowLeft, Hash, ImagePlus, Loader2, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { MobileNav, Navbar } from "@/components/Navbar";
+import { Navbar } from "@/components/Navbar";
 import { MentionTextarea } from "@/components/MentionTextarea";
 
 export default function UploadPost() {
@@ -49,7 +49,6 @@ export default function UploadPost() {
             Entrar
           </button>
         </div>
-        <MobileNav />
       </div>
     );
   }
@@ -266,7 +265,6 @@ export default function UploadPost() {
         </button>
       </main>
 
-      <MobileNav />
     </div>
   );
 }

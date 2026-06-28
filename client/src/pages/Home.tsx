@@ -4,7 +4,7 @@ import { getLoginUrl } from "@/const";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { MobileNav, Navbar } from "@/components/Navbar";
+import { Navbar } from "@/components/Navbar";
 import { PostCard } from "@/components/PostCard";
 import { Button } from "@/components/ui/button";
 import { PageTransition } from "@/components/PageTransition";
@@ -135,7 +135,6 @@ export default function Home() {
           </div>
         )}
         </main>
-        <MobileNav />
       </div>
     </PageTransition>
   );

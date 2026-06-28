@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { Hash, Loader2, Search, User } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { MobileNav, Navbar } from "@/components/Navbar";
+import { Navbar } from "@/components/Navbar";
 
 export default function Explore() {
   const [, navigate] = useLocation();
@@ -136,7 +136,6 @@ export default function Explore() {
         )}
       </main>
 
-      <MobileNav />
     </div>
   );
 }

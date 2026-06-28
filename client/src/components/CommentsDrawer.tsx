@@ -111,20 +111,11 @@ export function CommentsDrawer({
   useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
-      document.body.classList.add("comments-drawer-open");
-      window.dispatchEvent(
-        new CustomEvent("commentsdrawerchange", { detail: { open: true } }),
-      );
     } else {
       document.body.style.overflow = "";
-      document.body.classList.remove("comments-drawer-open");
-      window.dispatchEvent(
-        new CustomEvent("commentsdrawerchange", { detail: { open: false } }),
-      );
     }
     return () => {
       document.body.style.overflow = "";
-      document.body.classList.remove("comments-drawer-open");
     };
   }, [open]);
 
