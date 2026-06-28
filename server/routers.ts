@@ -9,6 +9,7 @@ import {
   getFollowing,
   getFollowingCount,
   getLikesByPost,
+  getUsersWhoLikedPost,
   getPostById,
   getPostsByHashtag,
   getPostsCount,
@@ -211,6 +212,12 @@ const likesRouter = router({
     .input(z.object({ postId: z.number() }))
     .query(async ({ input }) => {
       return getLikesByPost(input.postId);
+    }),
+
+  usersByPost: publicProcedure
+    .input(z.object({ postId: z.number() }))
+    .query(async ({ input }) => {
+      return getUsersWhoLikedPost(input.postId);
     }),
 });
 

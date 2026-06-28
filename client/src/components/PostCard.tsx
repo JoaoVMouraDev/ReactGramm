@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { CommentsDrawer } from "./CommentsDrawer";
+import { LikeListModal } from "./LikeListModal";
 import { UserHoverCard } from "./UserHoverCard";
 import { EditPostModal } from "./EditPostModal";
 import { ImageLightbox } from "./ImageLightbox";
@@ -54,6 +55,7 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
   const [commentsCount, setCommentsCount] = useState(post.commentsCount);
   const [showMenu, setShowMenu] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showLikes, setShowLikes] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImageLightbox, setShowImageLightbox] = useState(false);
   const [heartAnim, setHeartAnim] = useState(false);
@@ -379,9 +381,12 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
 
         {/* Stats */}
         <div className="px-3 pb-1">
-          <p className="text-sm font-semibold">
+          <button
+            onClick={() => setShowLikes(true)}
+            className="text-sm font-semibold hover:underline text-left"
+          >
             {likesCount} {likesCount === 1 ? "curtida" : "curtidas"}
-          </p>
+          </button>
         </div>
 
         {/* Caption */}
@@ -471,6 +476,9 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
         onClose={() => setShowComments(false)}
         onCommentAdded={() => setCommentsCount((c) => c + 1)}
       />
+      {showLikes ? (
+        <LikeListModal postId={post.id} onClose={() => setShowLikes(false)} />
+      ) : null}
       {showEditModal ? (
         <EditPostModal
           post={post}

@@ -652,6 +652,35 @@ export async function getLikesByPost(postId: number): Promise<Like[]> {
   return db.select().from(likes).where(eq(likes.postId, postId));
 }
 
+export async function getUsersWhoLikedPost(postId: number): Promise<Array<User>> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: users.id,
+      openId: users.openId,
+      name: users.name,
+      email: users.email,
+      passwordHash: users.passwordHash,
+      loginMethod: users.loginMethod,
+      googleId: users.googleId,
+      githubId: users.githubId,
+      role: users.role,
+      username: users.username,
+      bio: users.bio,
+      avatarUrl: users.avatarUrl,
+      avatarKey: users.avatarKey,
+      emailVerified: users.emailVerified,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+      lastSignedIn: users.lastSignedIn,
+    })
+    .from(likes)
+    .innerJoin(users, eq(likes.userId, users.id))
+    .where(eq(likes.postId, postId))
+    .orderBy(desc(likes.createdAt)) as Promise<Array<User>>;
+}
+
 export async function getUserLikedPostIds(
   userId: number,
   postIds: number[]
