@@ -31,6 +31,13 @@ type CommentItem = {
   };
 };
 
+const QUICK_REACTIONS = ["❤️", "🙌", "🔥", "👏", "🥲", "😍", "😮", "😂"];
+
+type MobileViewport = {
+  height: number;
+  top: number;
+};
+
 function getDisplayName(comment: CommentItem) {
   return comment.user?.username ?? comment.user?.name ?? "usuário";
 }
@@ -45,6 +52,7 @@ export function CommentsDrawer({
   const [, navigate] = useLocation();
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<CommentItem | null>(null);
+  const [mobileViewport, setMobileViewport] = useState<MobileViewport | null>(null);
   const utils = trpc.useUtils();
 
   const { data: comments, isLoading } = trpc.comments.getByPost.useQuery(
@@ -120,6 +128,39 @@ export function CommentsDrawer({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) {
+      setMobileViewport(null);
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    const mobileQuery = window.matchMedia("(max-width: 639px)");
+
+    const updateViewport = () => {
+      if (!viewport || !mobileQuery.matches) {
+        setMobileViewport(null);
+        return;
+      }
+
+      setMobileViewport({
+        height: Math.round(viewport.height),
+        top: Math.round(viewport.offsetTop),
+      });
+    };
+
+    updateViewport();
+    viewport?.addEventListener("resize", updateViewport);
+    viewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("resize", updateViewport);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateViewport);
+      viewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, [open]);
+
   const handleSubmit = () => {
     if (!user) {
       navigate("/login");
@@ -164,24 +205,37 @@ export function CommentsDrawer({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div
+      className="fixed inset-x-0 bottom-0 z-50 flex h-[100dvh] items-end justify-center sm:inset-0 sm:h-auto sm:items-center"
+      style={
+        mobileViewport
+          ? {
+              bottom: "auto",
+              height: `${mobileViewport.height}px`,
+              top: `${mobileViewport.top}px`,
+            }
+          : undefined
+      }
+    >
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      <div className="relative flex h-[88dvh] w-full flex-col bg-card shadow-2xl animate-fade-in sm:h-auto sm:max-h-[85vh] sm:w-[min(92vw,42rem)] sm:rounded-2xl">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
-          <h3 className="font-semibold text-base">Comentários</h3>
+      <div className="relative flex h-[92%] max-h-[calc(100%_-_0.5rem)] w-full flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl animate-fade-in sm:h-auto sm:max-h-[85vh] sm:w-[min(92vw,42rem)] sm:rounded-2xl">
+        <div className="relative border-b border-border px-4 pb-3 pt-5 sm:px-5 sm:pt-3">
+          <span className="absolute left-1/2 top-2 h-1 w-12 -translate-x-1/2 rounded-full bg-muted-foreground/60 sm:hidden" />
+          <h3 className="text-center text-base font-semibold">Comentários</h3>
           <button
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-muted transition-colors text-muted-foreground"
+            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted sm:right-5"
+            aria-label="Fechar comentários"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 space-y-4 sm:px-5 sm:py-4">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="animate-spin text-muted-foreground" size={24} />
@@ -217,9 +271,14 @@ export function CommentsDrawer({
                       </div>
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className="bg-muted rounded-xl px-3 py-2">
-                        <p className="text-xs font-semibold mb-0.5">{username}</p>
-                        <p className="text-sm wrap-break-word">
+                      <div className="pr-2 text-sm leading-5">
+                        <p className="wrap-break-word">
+                          <button
+                            onClick={() => goToProfile(comment)}
+                            className="mr-1 font-semibold hover:underline"
+                          >
+                            {username}
+                          </button>
                           <MentionText text={comment.text} onMentionClick={onClose} />
                         </p>
                       </div>
@@ -269,9 +328,14 @@ export function CommentsDrawer({
                               </div>
                             </button>
                             <div className="flex-1 min-w-0">
-                              <div className="bg-muted/70 rounded-xl px-3 py-2">
-                                <p className="text-xs font-semibold mb-0.5">{replyName}</p>
-                                <p className="text-sm wrap-break-word">
+                              <div className="pr-2 text-sm leading-5">
+                                <p className="wrap-break-word">
+                                  <button
+                                    onClick={() => goToProfile(reply)}
+                                    className="mr-1 font-semibold hover:underline"
+                                  >
+                                    {replyName}
+                                  </button>
                                   <MentionText text={reply.text} onMentionClick={onClose} />
                                 </p>
                               </div>
@@ -305,7 +369,7 @@ export function CommentsDrawer({
           )}
         </div>
 
-        <div className="border-t border-border px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-5 sm:pb-4">
+        <div className="shrink-0 border-t border-border bg-card px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 sm:px-5 sm:pb-4 sm:pt-3">
           {user ? (
             <div className="space-y-2">
               {replyTo && (
@@ -322,6 +386,20 @@ export function CommentsDrawer({
                   </button>
                 </div>
               )}
+
+              <div className="flex items-center justify-between gap-2 overflow-x-auto py-1 sm:hidden">
+                {QUICK_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setText((current) => `${current}${emoji}`)}
+                    className="shrink-0 rounded-full p-1 text-2xl leading-none transition-transform active:scale-90"
+                    aria-label={`Adicionar ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
 
               <div className="flex gap-2 items-center">
                 <div className="w-8 h-8 rounded-full ig-gradient p-0.5 shrink-0">
@@ -350,7 +428,7 @@ export function CommentsDrawer({
                     }
                   }}
                   rows={1}
-                  className="flex-1 bg-muted rounded-2xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none min-h-10 max-h-24"
+                  className="min-h-10 max-h-24 flex-1 resize-none rounded-2xl border border-border bg-muted/60 px-4 py-2 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/30"
                   disabled={createMutation.isPending}
                   autoFocus
                 />
