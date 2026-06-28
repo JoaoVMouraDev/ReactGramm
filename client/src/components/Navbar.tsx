@@ -148,10 +148,10 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 bg-card/95 backdrop-blur border-b border-border">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-1 px-2 sm:gap-4 sm:px-4">
         <button
           onClick={() => navigate("/")}
-          className="font-bold text-xl tracking-tight ig-gradient-text shrink-0"
+          className="shrink-0 text-lg font-bold tracking-tight ig-gradient-text sm:text-xl"
         >
           ReactGram
         </button>
@@ -221,14 +221,14 @@ export function Navbar() {
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => navigate("/")}
-            className="p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
+            className="rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted sm:p-2"
             title="Início"
           >
             <Home size={22} />
           </button>
           <button
             onClick={() => navigate("/explore")}
-            className="p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
+            className="rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted sm:p-2"
             title="Explorar"
           >
             <Compass size={22} />
@@ -236,7 +236,7 @@ export function Navbar() {
           {user && (
             <button
               onClick={() => navigate("/upload")}
-              className="p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
+              className="rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted sm:p-2"
               title="Novo post"
             >
               <PlusSquare size={22} />
@@ -244,7 +244,7 @@ export function Navbar() {
           )}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
+            className="rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted sm:p-2"
             title="Alternar tema"
           >
             {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
@@ -260,7 +260,7 @@ export function Navbar() {
                     return nextValue;
                   });
                 }}
-                className="relative p-2 rounded-lg hover:bg-muted transition-colors text-foreground"
+                className="relative rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted sm:p-2"
                 title="Notificações"
               >
                 <Bell size={20} />
