@@ -413,6 +413,7 @@ export function Navbar() {
 export function MobileNav() {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
+  const [commentsDrawerOpen, setCommentsDrawerOpen] = useState(false);
 
   const items = [
     { icon: Home, path: "/", label: "Início" },
@@ -429,8 +430,22 @@ export function MobileNav() {
       : []),
   ];
 
+  useEffect(() => {
+    const handleChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+      setCommentsDrawerOpen(Boolean(detail?.open));
+    };
+
+    window.addEventListener("commentsdrawerchange", handleChange as EventListener);
+    return () => window.removeEventListener("commentsdrawerchange", handleChange as EventListener);
+  }, []);
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur border-t border-border sm:hidden">
+    <nav
+      className={`fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur border-t border-border sm:hidden ${
+        commentsDrawerOpen ? "hidden" : ""
+      }`}
+    >
       <div className="flex items-center justify-around h-14 px-2">
         {items.map((item) => {
           const isActive = location === item.path;
