@@ -41,11 +41,12 @@ export function useAuth(options?: UseAuthOptions) {
     }
   }, [logoutMutation, utils]);
 
-  const state = useMemo(() => {
-    localStorage.setItem(
-      "reactgram-user-info",
-      JSON.stringify(meQuery.data)
-    );
+  const safeState = useMemo(() => {
+    try {
+      localStorage.setItem("reactgram-user-info", JSON.stringify(meQuery.data));
+    } catch {
+      // Some mobile browsers block storage in private or restricted mode.
+    }
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,
@@ -63,7 +64,7 @@ export function useAuth(options?: UseAuthOptions) {
   useEffect(() => {
     if (!redirectOnUnauthenticated) return;
     if (meQuery.isLoading || logoutMutation.isPending) return;
-    if (state.user) return;
+    if (safeState.user) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
 
@@ -73,11 +74,11 @@ export function useAuth(options?: UseAuthOptions) {
     redirectPath,
     logoutMutation.isPending,
     meQuery.isLoading,
-    state.user,
+    safeState.user,
   ]);
 
   return {
-    ...state,
+    ...safeState,
     refresh: () => meQuery.refetch(),
     logout,
   };

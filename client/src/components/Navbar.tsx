@@ -44,6 +44,22 @@ function getSeenNotificationsKey(userId: number | string | undefined) {
   return `reactgram-seen-notifications-${userId ?? "guest"}`;
 }
 
+function safeGetItem(key: string) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetItem(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures on restricted browsers.
+  }
+}
+
 export function Navbar() {
   const [, navigate] = useLocation();
   const { user, logout } = useAuth();
@@ -80,7 +96,7 @@ export function Navbar() {
     }
 
     try {
-      const saved = localStorage.getItem(getSeenNotificationsKey(user.id));
+      const saved = safeGetItem(getSeenNotificationsKey(user.id));
       const ids = saved ? (JSON.parse(saved) as string[]) : [];
       setSeenNotificationIds(new Set(ids));
     } catch {
@@ -96,7 +112,7 @@ export function Navbar() {
       for (const notification of notifications) {
         next.add(notification.id);
       }
-      localStorage.setItem(
+      safeSetItem(
         getSeenNotificationsKey(user.id),
         JSON.stringify(Array.from(next).slice(-100)),
       );
