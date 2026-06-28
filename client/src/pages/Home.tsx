@@ -14,7 +14,6 @@ export default function Home() {
   const [, navigate] = useLocation();
   const [offset, setOffset] = useState(0);
   const [inView, setInView] = useState(false);
-  const [storyAvatarFailed, setStoryAvatarFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // Hook para observar o scroll e disparar o carregamento automático
@@ -41,10 +40,6 @@ export default function Home() {
       navigate("/login");
     }
   }, [isAuthenticated, loading, navigate]);
-
-  useEffect(() => {
-    setStoryAvatarFailed(false);
-  }, [user?.avatarUrl]);
 
   const {
     data,
@@ -88,35 +83,6 @@ export default function Home() {
         <Navbar />
 
         <main className="max-w-lg mx-auto px-0 sm:px-4 py-4 pb-20 sm:pb-4">
-          {/* Stories row placeholder */}
-        <div className="overflow-x-auto pb-3 mb-2 px-3 sm:px-0">
-          <div className="flex gap-3 w-max">
-            {user && user.username && ( // Adicionado user.username para evitar erro de tipo
-              <div className="flex flex-col items-center gap-1.5 shrink-0">
-                <div className="w-16 h-16 rounded-full ig-gradient p-0.5 cursor-pointer hover:opacity-90 transition-opacity">
-                  <div className="w-full h-full rounded-full bg-card overflow-hidden flex items-center justify-center">
-                    {user.avatarUrl && !storyAvatarFailed ? (
-                      <img
-                        src={user.avatarUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        onError={() => setStoryAvatarFailed(true)}
-                      />
-                    ) : (
-                      <span className="text-lg font-bold text-foreground">
-                        {(user.username ?? user.name ?? "?")[0]?.toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span className="text-xs text-muted-foreground truncate w-16 text-center">
-                  {user.username ?? "Você"}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Feed */}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
