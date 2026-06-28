@@ -227,6 +227,25 @@ button:active {
   }
 }
 
+.notification-scrollbar {
+  scrollbar-color: var(--color-muted-foreground) transparent;
+  scrollbar-width: thin;
+}
+
+.notification-scrollbar::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.notification-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notification-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-muted-foreground);
+  border-radius: 9999px;
+}
+
 /* Fade in animation */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }

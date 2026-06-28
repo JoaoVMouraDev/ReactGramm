@@ -292,7 +292,7 @@ export function Navbar() {
                     </p>
                   </div>
 
-                  <div className="divide-y divide-border">
+                  <div className="notification-scrollbar max-h-[calc(100dvh-8rem)] divide-y divide-border overflow-y-auto overscroll-contain sm:max-h-[32rem]">
                     {notificationsLoading ? (
                       <p className="px-4 py-6 text-center text-sm text-muted-foreground">
                         Carregando...
