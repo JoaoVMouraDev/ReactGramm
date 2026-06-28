@@ -51,15 +51,16 @@ export async function getDb() {
     }
     try {
       const connectionUrl = new URL(connectionString);
-      const usesTransactionPooler =
+      const usesSupabasePooler =
         connectionUrl.hostname.endsWith(".pooler.supabase.com") && connectionUrl.port === "6543";
+      const isVercel = Boolean(process.env.VERCEL);
 
       _db = drizzle(
         postgres(connectionString, {
-          max: process.env.VERCEL ? 1 : 5,
-          connect_timeout: 10,
-          idle_timeout: 20,
-          prepare: !usesTransactionPooler,
+          max: isVercel ? 1 : 5,
+          connect_timeout: 5,
+          idle_timeout: isVercel ? 5 : 20,
+          prepare: !usesSupabasePooler && !isVercel,
         }),
       );
     } catch (error) {
@@ -71,6 +72,10 @@ export async function getDb() {
 }
 
 export async function ensureDatabaseSchema(): Promise<void> {
+  if (process.env.VERCEL) {
+    return;
+  }
+
   const db = await getDb();
   if (!db) return;
 
