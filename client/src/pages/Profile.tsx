@@ -5,6 +5,7 @@ import {
   Camera,
   Grid3X3,
   Loader2,
+  Mail,
   Settings,
   UserCheck,
   UserPlus,
@@ -146,29 +147,42 @@ export default function Profile() {
                   </button>
                 </div>
               ) : currentUser ? (
-                <button
-                  onClick={() => toggleFollowMutation.mutate({ userId: profile.id })}
-                  disabled={toggleFollowMutation.isPending}
-                  className={`flex items-center gap-2 px-5 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                    profile.isFollowing
-                      ? "border border-border hover:bg-muted"
-                      : "ig-gradient text-white hover:opacity-90"
-                  }`}
-                >
-                  {toggleFollowMutation.isPending ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : profile.isFollowing ? (
-                    <>
-                      <UserCheck size={14} />
-                      Seguindo
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus size={14} />
-                      {profile.isFollowedBy ? "Seguir de volta" : "Seguir"}
-                    </>
-                  )}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => toggleFollowMutation.mutate({ userId: profile.id })}
+                    disabled={toggleFollowMutation.isPending}
+                    className={`flex items-center gap-2 px-5 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                      profile.isFollowing
+                        ? "border border-border hover:bg-muted"
+                        : "ig-gradient text-white hover:opacity-90"
+                    }`}
+                  >
+                    {toggleFollowMutation.isPending ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : profile.isFollowing ? (
+                      <>
+                        <UserCheck size={14} />
+                        Seguindo
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={14} />
+                        {profile.isFollowedBy ? "Seguir de volta" : "Seguir"}
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() =>
+                      navigate(
+                        `/messages?user=${encodeURIComponent(profile.username ?? String(profile.id))}`,
+                      )
+                    }
+                    className="flex items-center gap-2 rounded-lg border border-border px-4 py-1.5 text-sm font-semibold transition-colors hover:bg-muted"
+                  >
+                    <Mail size={15} />
+                    Mensagem
+                  </button>
+                </div>
               ) : (
                 <button // Changed to use navigate for better SPA experience
                   onClick={() => navigate("/login")}

@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 export default function Messages() {
   const { isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
+  const selectedUser = new URLSearchParams(window.location.search).get("user");
 
   useEffect(() => {
     if (!loading && !isAuthenticated) navigate("/login");
@@ -25,9 +26,13 @@ export default function Messages() {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card">
             <Mail size={28} className="text-muted-foreground" />
           </div>
-          <h2 className="text-base font-semibold">Nenhuma conversa ainda</h2>
+          <h2 className="text-base font-semibold">
+            {selectedUser ? `Conversa com @${selectedUser}` : "Nenhuma conversa ainda"}
+          </h2>
           <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-            Encontre um perfil para iniciar uma conversa.
+            {selectedUser
+              ? "O chat estará disponível aqui na próxima etapa."
+              : "Encontre um perfil para iniciar uma conversa."}
           </p>
           <Button
             onClick={() => navigate("/explore")}
