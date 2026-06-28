@@ -8,6 +8,7 @@ import {
   Heart,
   Home,
   LogOut,
+  Mail,
   MessageCircle,
   Moon,
   PlusSquare,
@@ -249,6 +250,17 @@ export function Navbar() {
           >
             {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
+
+          {user && (
+            <button
+              onClick={() => navigate("/messages")}
+              className="rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted sm:p-2"
+              title="Mensagens"
+              aria-label="Mensagens"
+            >
+              <Mail size={20} />
+            </button>
+          )}
 
           {user && (
             <div ref={notificationsRef} className="relative">

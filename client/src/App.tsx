@@ -12,6 +12,7 @@ import HashtagPage from "./pages/HashtagPage";
 import PostDetail from "./pages/PostDetail";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import Messages from "./pages/Messages";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/upload" component={UploadPost} />
       <Route path="/explore" component={Explore} />
+      <Route path="/messages" component={Messages} />
 
       {/* Rotas dinâmicas depois */}
       <Route path="/profile/:username" component={Profile} />
