@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Navbar } from "@/components/Navbar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Images, Mail, Send, Smile, X } from "lucide-react";
+import { ArrowLeft, Mail, Send, Smile } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -31,7 +31,6 @@ export default function Messages() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [showEmojis, setShowEmojis] = useState(false);
-  const [showPosts, setShowPosts] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,15 +61,10 @@ export default function Messages() {
     onSuccess: async () => {
       setDraft("");
       setShowEmojis(false);
-      setShowPosts(false);
       await Promise.all([history.refetch(), conversations.refetch()]);
     },
     onError: (error) => toast.error(error.message),
   });
-  const shareablePosts = trpc.posts.feed.useQuery(
-    { limit: 24, offset: 0 },
-    { enabled: showPosts, staleTime: 60000 },
-  );
   const realtimeToken = trpc.messages.realtimeToken.useQuery(undefined, {
     enabled: isAuthenticated,
     staleTime: 50 * 60 * 1000,
@@ -120,11 +114,6 @@ export default function Messages() {
     event.preventDefault();
     if (!selectedId || !draft.trim() || send.isPending) return;
     send.mutate({ conversationId: selectedId, text: draft.trim() });
-  };
-
-  const sharePost = (postId: number) => {
-    if (!selectedId || send.isPending) return;
-    send.mutate({ conversationId: selectedId, text: "", postId });
   };
 
   if (loading || !isAuthenticated || !user) return null;
@@ -232,23 +221,7 @@ export default function Messages() {
                       ))}
                     </div>
                   ) : null}
-                  {showPosts ? (
-                    <div className="absolute bottom-[4.25rem] left-3 right-3 z-20 max-h-[55dvh] overflow-hidden rounded-lg border border-border bg-card shadow-xl sm:left-4 sm:right-4">
-                      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                        <p className="text-sm font-semibold">Enviar publicação</p>
-                        <button type="button" onClick={() => setShowPosts(false)} className="rounded p-1 hover:bg-muted" aria-label="Fechar publicações"><X size={18} /></button>
-                      </div>
-                      <div className="grid max-h-[calc(55dvh-2.75rem)] grid-cols-3 gap-1 overflow-y-auto p-2 sm:grid-cols-4">
-                        {shareablePosts.isLoading ? <p className="col-span-full py-8 text-center text-sm text-muted-foreground">Carregando...</p> : shareablePosts.data?.length ? shareablePosts.data.map((post) => (
-                          <button key={post.id} type="button" onClick={() => sharePost(post.id)} disabled={send.isPending} className="relative aspect-square overflow-hidden rounded bg-muted disabled:opacity-50" title={`Enviar publicação de @${post.user?.username ?? "usuário"}`}>
-                            <img src={post.imageUrl} alt="" className="h-full w-full object-cover transition-transform hover:scale-105" />
-                          </button>
-                        )) : <p className="col-span-full py-8 text-center text-sm text-muted-foreground">Nenhuma publicação disponível.</p>}
-                      </div>
-                    </div>
-                  ) : null}
-                  <button type="button" onClick={() => { setShowEmojis((value) => !value); setShowPosts(false); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Adicionar emoji"><Smile size={21} /></button>
-                  <button type="button" onClick={() => { setShowPosts((value) => !value); setShowEmojis(false); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Enviar publicação"><Images size={21} /></button>
+                  <button type="button" onClick={() => setShowEmojis((value) => !value)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Adicionar emoji"><Smile size={21} /></button>
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}

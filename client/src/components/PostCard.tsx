@@ -21,6 +21,7 @@ import { UserHoverCard } from "./UserHoverCard";
 import { EditPostModal } from "./EditPostModal";
 import { ImageLightbox } from "./ImageLightbox";
 import { MentionText } from "./MentionText";
+import { SharePostDialog } from "./SharePostDialog";
 
 interface PostCardProps {
   post: {
@@ -58,6 +59,7 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
   const [showLikes, setShowLikes] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImageLightbox, setShowImageLightbox] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [heartAnim, setHeartAnim] = useState(false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -200,6 +202,15 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
     (globalThis as any).navigator?.clipboard?.writeText(`${(globalThis as any).location?.origin}/post/${post.id}`);
     toast.success("Link copiado!");
     setShowMenu(false);
+  };
+
+  const handleShare = () => {
+    if (!user) {
+      toast.error("Faça login para compartilhar publicações");
+      navigate("/login");
+      return;
+    }
+    setShowShare(true);
   };
 
   const handleReport = () => {
@@ -365,8 +376,9 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
             <MessageCircle size={24} />
           </button>
           <button
-            onClick={handleCopyLink}
+            onClick={handleShare}
             className="text-muted-foreground hover:text-foreground transition-colors hover:scale-110"
+            aria-label="Compartilhar publicação"
           >
             <Send size={24} />
           </button>
@@ -469,6 +481,7 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
           </button>
         )}
       </article>
+      <SharePostDialog open={showShare} onOpenChange={setShowShare} postId={post.id} />
 
       <CommentsDrawer
         postId={post.id}
