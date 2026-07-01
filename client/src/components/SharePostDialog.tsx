@@ -1,7 +1,9 @@
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Check, MessageCircle } from "lucide-react";
+import { Loader2, Search, UserRound } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -12,52 +14,97 @@ interface SharePostDialogProps {
 }
 
 export function SharePostDialog({ open, onOpenChange, postId }: SharePostDialogProps) {
+  const { user } = useAuth();
   const [, navigate] = useLocation();
-  const conversations = trpc.messages.listConversations.useQuery(undefined, { enabled: open });
-  const send = trpc.messages.send.useMutation({
-    onSuccess: (_, variables) => {
-      const conversation = conversations.data?.find((item) => item.id === variables.conversationId);
-      toast.success(`Enviado para @${conversation?.otherUser.username ?? "conversa"}`);
+  const [query, setQuery] = useState("");
+  const [sendingTo, setSendingTo] = useState<number | null>(null);
+
+  const following = trpc.follows.following.useQuery(
+    { userId: user?.id ?? 0 },
+    { enabled: open && Boolean(user?.id) },
+  );
+  const openDirect = trpc.messages.openDirect.useMutation();
+  const send = trpc.messages.send.useMutation();
+
+  const people = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("pt-BR");
+    if (!normalized) return following.data ?? [];
+    return (following.data ?? []).filter((person) =>
+      [person.username, person.name].some((value) =>
+        value?.toLocaleLowerCase("pt-BR").includes(normalized),
+      ),
+    );
+  }, [following.data, query]);
+
+  const shareWith = async (person: (typeof people)[number]) => {
+    if (!person.username || sendingTo !== null) return;
+    setSendingTo(person.id);
+    try {
+      const { conversationId } = await openDirect.mutateAsync({ username: person.username });
+      await send.mutateAsync({ conversationId, text: "", postId });
+      toast.success(`Enviado para @${person.username}`);
+      setQuery("");
       onOpenChange(false);
-    },
-    onError: (error) => toast.error(error.message),
-  });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível enviar a publicação");
+    } finally {
+      setSendingTo(null);
+    }
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80dvh] gap-0 overflow-hidden p-0 sm:max-w-md">
+    <Dialog open={open} onOpenChange={(value) => { if (sendingTo === null) onOpenChange(value); }}>
+      <DialogContent className="flex max-h-[82dvh] flex-col gap-0 overflow-hidden bg-card p-0 sm:max-w-xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
-          <DialogTitle className="text-base">Compartilhar publicação</DialogTitle>
-          <DialogDescription>Escolha uma conversa</DialogDescription>
+          <DialogTitle className="text-center text-base">Compartilhar</DialogTitle>
+          <DialogDescription className="sr-only">Escolha alguém que você segue</DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60dvh] overflow-y-auto">
-          {conversations.isLoading ? (
-            <p className="px-5 py-8 text-center text-sm text-muted-foreground">Carregando conversas...</p>
-          ) : conversations.data?.length ? (
-            conversations.data.map((conversation) => (
-              <button
-                key={conversation.id}
-                type="button"
-                disabled={send.isPending}
-                onClick={() => send.mutate({ conversationId: conversation.id, text: "", postId })}
-                className="flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left transition-colors hover:bg-muted disabled:opacity-50"
-              >
-                <Avatar className="h-11 w-11 ring-2 ring-primary/60">
-                  <AvatarImage src={conversation.otherUser.avatarUrl ?? undefined} />
-                  <AvatarFallback>{(conversation.otherUser.username ?? conversation.otherUser.name ?? "?")[0]?.toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{conversation.otherUser.username ?? conversation.otherUser.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{conversation.otherUser.name}</p>
-                </div>
-                {send.isPending && send.variables?.conversationId === conversation.id ? <Check size={18} className="text-primary" /> : null}
-              </button>
-            ))
+
+        <div className="p-3">
+          <div className="relative">
+            <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Pesquisar"
+              className="h-10 w-full rounded-lg bg-muted pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+          {following.isLoading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="animate-spin" /></div>
+          ) : people.length ? (
+            <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4">
+              {people.map((person) => {
+                const label = person.username ?? person.name ?? "usuário";
+                const isSending = sendingTo === person.id;
+                return (
+                  <button
+                    key={person.id}
+                    type="button"
+                    disabled={sendingTo !== null}
+                    onClick={() => shareWith(person)}
+                    className="flex min-w-0 flex-col items-center gap-2 rounded-lg p-2 text-center transition-colors hover:bg-muted disabled:opacity-60"
+                  >
+                    <div className="relative">
+                      <Avatar className="h-16 w-16 ring-2 ring-primary/60 sm:h-20 sm:w-20">
+                        <AvatarImage src={person.avatarUrl ?? undefined} />
+                        <AvatarFallback>{label[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      {isSending ? <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60 text-white"><Loader2 size={22} className="animate-spin" /></span> : null}
+                    </div>
+                    <span className="line-clamp-2 w-full text-xs font-medium">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
           ) : (
-            <div className="flex flex-col items-center px-5 py-9 text-center">
-              <MessageCircle size={28} className="mb-2 text-muted-foreground" />
-              <p className="text-sm font-semibold">Nenhuma conversa ainda</p>
-              <button type="button" onClick={() => { onOpenChange(false); navigate("/explore"); }} className="mt-3 text-sm font-semibold text-primary hover:underline">Encontrar pessoas</button>
+            <div className="flex flex-col items-center px-5 py-10 text-center">
+              <UserRound size={30} className="mb-2 text-muted-foreground" />
+              <p className="text-sm font-semibold">{query ? "Nenhuma pessoa encontrada" : "Você ainda não segue ninguém"}</p>
+              {!query ? <button type="button" onClick={() => { onOpenChange(false); navigate("/explore"); }} className="mt-3 text-sm font-semibold text-primary hover:underline">Encontrar pessoas</button> : null}
             </div>
           )}
         </div>
