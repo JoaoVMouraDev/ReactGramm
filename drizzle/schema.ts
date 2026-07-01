@@ -147,3 +147,55 @@ export const follows = pgTable(
 
 export type Follow = typeof follows.$inferSelect;
 export type InsertFollow = typeof follows.$inferInsert;
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: serial("id").primaryKey(),
+    directKey: varchar("directKey", { length: 64 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("conversations_directKey_unique").on(table.directKey)],
+);
+
+export const conversationMembers = pgTable(
+  "conversation_members",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: integer("conversationId")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("lastReadAt").defaultNow().notNull(),
+    joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("conversation_members_conversation_user_unique").on(
+      table.conversationId,
+      table.userId,
+    ),
+    index("conversation_members_userId_idx").on(table.userId),
+  ],
+);
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: integer("conversationId")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: integer("senderId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [
+    index("messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+    index("messages_senderId_idx").on(table.senderId),
+  ],
+);

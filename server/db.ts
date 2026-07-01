@@ -15,8 +15,11 @@ import {
   User,
   commentLikes,
   comments,
+  conversationMembers,
+  conversations,
   follows,
   likes,
+  messages,
   posts,
   users,
 } from "../drizzle/schema";
@@ -1137,4 +1140,172 @@ export async function getPostsCount(userId: number): Promise<number> {
     .from(posts)
     .where(eq(posts.userId, userId));
   return Number(result[0]?.count ?? 0);
+}
+
+export async function getOrCreateDirectConversation(userId: number, username: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+
+  const other = await getUserByUsername(username);
+  if (!other) throw new Error("USER_NOT_FOUND");
+  if (other.id === userId) throw new Error("SELF_CONVERSATION");
+
+  const directKey = [userId, other.id].sort((a, b) => a - b).join(":");
+  await db.insert(conversations).values({ directKey }).onConflictDoNothing();
+  const [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(eq(conversations.directKey, directKey))
+    .limit(1);
+  if (!conversation) throw new Error("Conversation could not be created");
+
+  await db
+    .insert(conversationMembers)
+    .values([
+      { conversationId: conversation.id, userId },
+      { conversationId: conversation.id, userId: other.id },
+    ])
+    .onConflictDoNothing();
+
+  return { conversationId: conversation.id, otherUser: publicChatUser(other) };
+}
+
+function publicChatUser(user: User) {
+  return {
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+  };
+}
+
+export async function isConversationMember(conversationId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  const [member] = await db
+    .select({ id: conversationMembers.id })
+    .from(conversationMembers)
+    .where(
+      and(
+        eq(conversationMembers.conversationId, conversationId),
+        eq(conversationMembers.userId, userId),
+      ),
+    )
+    .limit(1);
+  return Boolean(member);
+}
+
+export async function listConversations(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  const rows = await db.execute(sql`
+    SELECT c.id,
+      c."updatedAt",
+      u.id AS "otherUserId",
+      u.username,
+      u.name,
+      u."avatarUrl",
+      latest.text AS "lastMessage",
+      latest."createdAt" AS "lastMessageAt",
+      COALESCE(unread.count, 0)::int AS "unreadCount"
+    FROM conversation_members mine
+    JOIN conversations c ON c.id = mine."conversationId"
+    JOIN conversation_members theirs
+      ON theirs."conversationId" = c.id AND theirs."userId" <> ${userId}
+    JOIN users u ON u.id = theirs."userId"
+    LEFT JOIN LATERAL (
+      SELECT m.text, m."createdAt"
+      FROM messages m
+      WHERE m."conversationId" = c.id
+      ORDER BY m."createdAt" DESC, m.id DESC
+      LIMIT 1
+    ) latest ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*)
+      FROM messages m
+      WHERE m."conversationId" = c.id
+        AND m."senderId" <> ${userId}
+        AND m."createdAt" > mine."lastReadAt"
+    ) unread ON true
+    WHERE mine."userId" = ${userId}
+    ORDER BY COALESCE(latest."createdAt", c."updatedAt") DESC
+  `);
+  return Array.from(rows as unknown as Iterable<any>).map((row) => ({
+    id: Number(row.id),
+    updatedAt: row.updatedAt,
+    otherUser: {
+      id: Number(row.otherUserId),
+      username: row.username,
+      name: row.name,
+      avatarUrl: row.avatarUrl,
+    },
+    lastMessage: row.lastMessage ?? null,
+    lastMessageAt: row.lastMessageAt ?? null,
+    unreadCount: Number(row.unreadCount ?? 0),
+  }));
+}
+
+export async function listMessages(conversationId: number, userId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  if (!(await isConversationMember(conversationId, userId))) return null;
+
+  const rows = await db
+    .select({
+      id: messages.id,
+      conversationId: messages.conversationId,
+      senderId: messages.senderId,
+      text: messages.text,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .where(eq(messages.conversationId, conversationId))
+    .orderBy(desc(messages.createdAt))
+    .limit(limit);
+  return rows.reverse();
+}
+
+export async function createMessage(conversationId: number, senderId: number, text: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  if (!(await isConversationMember(conversationId, senderId))) return null;
+
+  const [message] = await db
+    .insert(messages)
+    .values({ conversationId, senderId, text })
+    .returning();
+  await db
+    .update(conversations)
+    .set({ updatedAt: new Date() })
+    .where(eq(conversations.id, conversationId));
+  return message;
+}
+
+export async function markConversationRead(conversationId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  await db
+    .update(conversationMembers)
+    .set({ lastReadAt: new Date() })
+    .where(
+      and(
+        eq(conversationMembers.conversationId, conversationId),
+        eq(conversationMembers.userId, userId),
+      ),
+    );
+}
+
+export async function getUnreadMessageCount(userId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db.execute(sql`
+    SELECT count(*)::int AS count
+    FROM conversation_members cm
+    JOIN messages m ON m."conversationId" = cm."conversationId"
+    WHERE cm."userId" = ${userId}
+      AND m."senderId" <> ${userId}
+      AND m."createdAt" > cm."lastReadAt"
+  `);
+  const [row] = Array.from(rows as unknown as Iterable<any>);
+  return Number(row?.count ?? 0);
 }

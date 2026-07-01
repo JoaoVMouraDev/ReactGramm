@@ -87,6 +87,10 @@ export function Navbar() {
       { limit: 20 },
       { enabled: Boolean(user), refetchInterval: 15000 },
     );
+  const { data: unreadMessages = 0 } = trpc.messages.unreadCount.useQuery(undefined, {
+    enabled: Boolean(user),
+    refetchInterval: 10000,
+  });
   const unreadNotificationsCount = notifications.filter(
     (notification) => !seenNotificationIds.has(notification.id),
   ).length;
@@ -255,11 +259,16 @@ export function Navbar() {
           {user && (
             <button
               onClick={() => navigate("/messages")}
-              className="rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted sm:p-2"
+              className="relative rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted sm:p-2"
               title="Mensagens"
               aria-label="Mensagens"
             >
               <Mail size={20} />
+              {unreadMessages > 0 && (
+                <span className="absolute right-0 top-0 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-bold leading-4 text-primary-foreground">
+                  {unreadMessages > 9 ? "9+" : unreadMessages}
+                </span>
+              )}
             </button>
           )}
 

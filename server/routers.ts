@@ -1,4 +1,5 @@
 import { z } from "zod";
+import Ably from "ably";
 import {
   createComment,
   createPost,
@@ -26,6 +27,13 @@ import {
   updateUserProfile,
   getCommentsByPost,
   getNotificationsForUser,
+  createMessage,
+  getOrCreateDirectConversation,
+  getUnreadMessageCount,
+  isConversationMember,
+  listConversations,
+  listMessages,
+  markConversationRead,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies.ts";       
 import { systemRouter } from "./_core/systemRouter";
@@ -429,6 +437,92 @@ const notificationsRouter = router({
     }),
 });
 
+function getAbly() {
+  const key = process.env.ABLY_API_KEY;
+  return key ? new Ably.Rest({ key }) : null;
+}
+
+const messagesRouter = router({
+  listConversations: protectedProcedure.query(({ ctx }) =>
+    listConversations(ctx.user.id),
+  ),
+
+  openDirect: protectedProcedure
+    .input(z.object({ username: z.string().min(1).max(64) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        return await getOrCreateDirectConversation(ctx.user.id, input.username);
+      } catch (error) {
+        if (error instanceof Error && error.message === "USER_NOT_FOUND") {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Perfil não encontrado" });
+        }
+        if (error instanceof Error && error.message === "SELF_CONVERSATION") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode conversar consigo" });
+        }
+        throw error;
+      }
+    }),
+
+  history: protectedProcedure
+    .input(z.object({ conversationId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      const history = await listMessages(input.conversationId, ctx.user.id);
+      if (!history) throw new TRPCError({ code: "FORBIDDEN" });
+      return history;
+    }),
+
+  send: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.number().int().positive(),
+        text: z.string().trim().min(1).max(2000),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const message = await createMessage(input.conversationId, ctx.user.id, input.text);
+      if (!message) throw new TRPCError({ code: "FORBIDDEN" });
+
+      const ably = getAbly();
+      if (ably) {
+        try {
+          await ably.channels.get(`conversation:${input.conversationId}`).publish("message", message);
+        } catch (error) {
+          console.error("[Chat] Realtime publish failed:", error);
+        }
+      }
+      return message;
+    }),
+
+  markRead: protectedProcedure
+    .input(z.object({ conversationId: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await isConversationMember(input.conversationId, ctx.user.id))) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      await markConversationRead(input.conversationId, ctx.user.id);
+      return { success: true };
+    }),
+
+  unreadCount: protectedProcedure.query(({ ctx }) => getUnreadMessageCount(ctx.user.id)),
+
+  realtimeToken: protectedProcedure.query(async ({ ctx }) => {
+    const ably = getAbly();
+    if (!ably) return null;
+    const conversationsForUser = await listConversations(ctx.user.id);
+    const capability = Object.fromEntries(
+      conversationsForUser.map((conversation) => [
+        `conversation:${conversation.id}`,
+        ["subscribe"],
+      ]),
+    );
+    return ably.auth.requestToken({
+      clientId: `user:${ctx.user.id}`,
+      capability: JSON.stringify(capability),
+      ttl: 60 * 60 * 1000,
+    });
+  }),
+});
+
 const usersRouter = router({
   getProfile: publicProcedure
     .input(z.object({ username: z.string() }))
@@ -611,6 +705,7 @@ export const appRouter = router({
   comments: commentsRouter,
   follows: followsRouter,
   notifications: notificationsRouter,
+  messages: messagesRouter,
   users: usersRouter,
 });
 
