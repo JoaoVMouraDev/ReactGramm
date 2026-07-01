@@ -153,8 +153,8 @@ export const conversations = pgTable(
   {
     id: serial("id").primaryKey(),
     directKey: varchar("directKey", { length: 64 }).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex("conversations_directKey_unique").on(table.directKey)],
 );
@@ -169,8 +169,8 @@ export const conversationMembers = pgTable(
     userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    lastReadAt: timestamp("lastReadAt").defaultNow().notNull(),
-    joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+    lastReadAt: timestamp("lastReadAt", { withTimezone: true }).defaultNow().notNull(),
+    joinedAt: timestamp("joinedAt", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("conversation_members_conversation_user_unique").on(
@@ -193,7 +193,7 @@ export const messages = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     postId: integer("postId").references(() => posts.id, { onDelete: "set null" }),
     text: text("text").notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("messages_conversation_created_idx").on(table.conversationId, table.createdAt),
