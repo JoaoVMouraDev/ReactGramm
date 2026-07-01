@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Navbar } from "@/components/Navbar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Mail, Send } from "lucide-react";
+import { ArrowLeft, Images, Mail, Send, Smile, X } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -21,6 +21,8 @@ function formatTime(value?: Date | string | null) {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
+const EMOJIS = ["😀", "😂", "😍", "🥰", "😎", "🥹", "😢", "😡", "👍", "👏", "🙏", "🔥", "❤️", "💜", "🎉", "✨", "💯", "🤝"];
+
 export default function Messages() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
@@ -28,6 +30,8 @@ export default function Messages() {
   const requestedUser = new URLSearchParams(window.location.search).get("user");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
+  const [showEmojis, setShowEmojis] = useState(false);
+  const [showPosts, setShowPosts] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,10 +61,16 @@ export default function Messages() {
   const send = trpc.messages.send.useMutation({
     onSuccess: async () => {
       setDraft("");
+      setShowEmojis(false);
+      setShowPosts(false);
       await Promise.all([history.refetch(), conversations.refetch()]);
     },
     onError: (error) => toast.error(error.message),
   });
+  const shareablePosts = trpc.posts.feed.useQuery(
+    { limit: 24, offset: 0 },
+    { enabled: showPosts, staleTime: 60000 },
+  );
   const realtimeToken = trpc.messages.realtimeToken.useQuery(undefined, {
     enabled: isAuthenticated,
     staleTime: 50 * 60 * 1000,
@@ -110,6 +120,11 @@ export default function Messages() {
     event.preventDefault();
     if (!selectedId || !draft.trim() || send.isPending) return;
     send.mutate({ conversationId: selectedId, text: draft.trim() });
+  };
+
+  const sharePost = (postId: number) => {
+    if (!selectedId || send.isPending) return;
+    send.mutate({ conversationId: selectedId, text: "", postId });
   };
 
   if (loading || !isAuthenticated || !user) return null;
@@ -189,9 +204,16 @@ export default function Messages() {
                       const mine = message.senderId === user.id;
                       return (
                         <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[78%] px-3 py-2 text-sm ${mine ? "rounded-l-lg rounded-tr-lg bg-primary text-primary-foreground" : "rounded-r-lg rounded-tl-lg bg-muted text-foreground"}`}>
-                            <p className="whitespace-pre-wrap break-words">{message.text}</p>
-                            <p className={`mt-1 text-right text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{formatTime(message.createdAt)}</p>
+                          <div className={`max-w-[78%] overflow-hidden text-sm ${message.postId ? "rounded-lg border border-border bg-card" : mine ? "rounded-l-lg rounded-tr-lg bg-primary px-3 py-2 text-primary-foreground" : "rounded-r-lg rounded-tl-lg bg-muted px-3 py-2 text-foreground"}`}>
+                            {message.postId && message.postImageUrl ? (
+                              <button onClick={() => navigate(`/post/${message.postId}`)} className="block w-52 max-w-full text-left sm:w-64">
+                                <img src={message.postImageUrl} alt="Publicação compartilhada" className="aspect-square w-full object-cover" />
+                                <span className="block truncate px-3 pt-2 text-xs font-semibold">@{message.postAuthorUsername ?? "usuário"}</span>
+                                {message.postCaption ? <span className="block line-clamp-2 px-3 pb-2 text-xs text-muted-foreground">{message.postCaption}</span> : <span className="block px-3 pb-2 text-xs text-primary">Ver publicação</span>}
+                              </button>
+                            ) : null}
+                            {message.text ? <p className={`whitespace-pre-wrap break-words ${message.postId ? "px-3 pt-2" : ""}`}>{message.text}</p> : null}
+                            <p className={`mt-1 text-right text-[10px] ${message.postId ? "px-3 pb-2 text-muted-foreground" : mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{formatTime(message.createdAt)}</p>
                           </div>
                         </div>
                       );
@@ -202,7 +224,31 @@ export default function Messages() {
                   <div ref={bottomRef} />
                 </div>
 
-                <form onSubmit={submit} className="flex shrink-0 items-end gap-2 border-t border-border bg-card p-3 sm:p-4">
+                <form onSubmit={submit} className="relative flex shrink-0 items-end gap-2 border-t border-border bg-card p-3 sm:p-4">
+                  {showEmojis ? (
+                    <div className="absolute bottom-[4.25rem] left-3 z-20 grid w-64 grid-cols-6 gap-1 rounded-lg border border-border bg-card p-2 shadow-xl sm:left-4">
+                      {EMOJIS.map((emoji) => (
+                        <button key={emoji} type="button" onClick={() => setDraft((value) => `${value}${emoji}`)} className="flex h-9 w-9 items-center justify-center rounded text-xl hover:bg-muted" aria-label={`Adicionar ${emoji}`}>{emoji}</button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {showPosts ? (
+                    <div className="absolute bottom-[4.25rem] left-3 right-3 z-20 max-h-[55dvh] overflow-hidden rounded-lg border border-border bg-card shadow-xl sm:left-4 sm:right-4">
+                      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                        <p className="text-sm font-semibold">Enviar publicação</p>
+                        <button type="button" onClick={() => setShowPosts(false)} className="rounded p-1 hover:bg-muted" aria-label="Fechar publicações"><X size={18} /></button>
+                      </div>
+                      <div className="grid max-h-[calc(55dvh-2.75rem)] grid-cols-3 gap-1 overflow-y-auto p-2 sm:grid-cols-4">
+                        {shareablePosts.isLoading ? <p className="col-span-full py-8 text-center text-sm text-muted-foreground">Carregando...</p> : shareablePosts.data?.length ? shareablePosts.data.map((post) => (
+                          <button key={post.id} type="button" onClick={() => sharePost(post.id)} disabled={send.isPending} className="relative aspect-square overflow-hidden rounded bg-muted disabled:opacity-50" title={`Enviar publicação de @${post.user?.username ?? "usuário"}`}>
+                            <img src={post.imageUrl} alt="" className="h-full w-full object-cover transition-transform hover:scale-105" />
+                          </button>
+                        )) : <p className="col-span-full py-8 text-center text-sm text-muted-foreground">Nenhuma publicação disponível.</p>}
+                      </div>
+                    </div>
+                  ) : null}
+                  <button type="button" onClick={() => { setShowEmojis((value) => !value); setShowPosts(false); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Adicionar emoji"><Smile size={21} /></button>
+                  <button type="button" onClick={() => { setShowPosts((value) => !value); setShowEmojis(false); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Enviar publicação"><Images size={21} /></button>
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}

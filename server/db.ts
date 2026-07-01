@@ -1205,7 +1205,7 @@ export async function listConversations(userId: number) {
       u.username,
       u.name,
       u."avatarUrl",
-      latest.text AS "lastMessage",
+      CASE WHEN latest."postId" IS NOT NULL THEN 'Publicação compartilhada' ELSE latest.text END AS "lastMessage",
       latest."createdAt" AS "lastMessageAt",
       COALESCE(unread.count, 0)::int AS "unreadCount"
     FROM conversation_members mine
@@ -1214,7 +1214,7 @@ export async function listConversations(userId: number) {
       ON theirs."conversationId" = c.id AND theirs."userId" <> ${userId}
     JOIN users u ON u.id = theirs."userId"
     LEFT JOIN LATERAL (
-      SELECT m.text, m."createdAt"
+      SELECT m.text, m."postId", m."createdAt"
       FROM messages m
       WHERE m."conversationId" = c.id
       ORDER BY m."createdAt" DESC, m.id DESC
@@ -1255,24 +1255,40 @@ export async function listMessages(conversationId: number, userId: number, limit
       id: messages.id,
       conversationId: messages.conversationId,
       senderId: messages.senderId,
+      postId: messages.postId,
       text: messages.text,
       createdAt: messages.createdAt,
+      postImageUrl: posts.imageUrl,
+      postCaption: posts.caption,
+      postAuthorUsername: users.username,
     })
     .from(messages)
+    .leftJoin(posts, eq(messages.postId, posts.id))
+    .leftJoin(users, eq(posts.userId, users.id))
     .where(eq(messages.conversationId, conversationId))
     .orderBy(desc(messages.createdAt))
     .limit(limit);
   return rows.reverse();
 }
 
-export async function createMessage(conversationId: number, senderId: number, text: string) {
+export async function createMessage(
+  conversationId: number,
+  senderId: number,
+  text: string,
+  postId?: number,
+) {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
   if (!(await isConversationMember(conversationId, senderId))) return null;
 
+  if (postId) {
+    const [post] = await db.select({ id: posts.id }).from(posts).where(eq(posts.id, postId)).limit(1);
+    if (!post) throw new Error("POST_NOT_FOUND");
+  }
+
   const [message] = await db
     .insert(messages)
-    .values({ conversationId, senderId, text })
+    .values({ conversationId, senderId, text, postId: postId ?? null })
     .returning();
   await db
     .update(conversations)

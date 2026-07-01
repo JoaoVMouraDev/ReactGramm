@@ -475,11 +475,27 @@ const messagesRouter = router({
     .input(
       z.object({
         conversationId: z.number().int().positive(),
-        text: z.string().trim().min(1).max(2000),
+        text: z.string().trim().max(2000).default(""),
+        postId: z.number().int().positive().optional(),
+      }).refine((value) => value.text.length > 0 || Boolean(value.postId), {
+        message: "Escreva uma mensagem ou escolha uma publicação",
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const message = await createMessage(input.conversationId, ctx.user.id, input.text);
+      let message;
+      try {
+        message = await createMessage(
+          input.conversationId,
+          ctx.user.id,
+          input.text,
+          input.postId,
+        );
+      } catch (error) {
+        if (error instanceof Error && error.message === "POST_NOT_FOUND") {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Publicação não encontrada" });
+        }
+        throw error;
+      }
       if (!message) throw new TRPCError({ code: "FORBIDDEN" });
 
       const ably = getAbly();
