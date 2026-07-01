@@ -768,12 +768,17 @@ export async function toggleCommentLike(
 
 export type AppNotification = {
   id: string;
-  type: "follow" | "like" | "comment" | "reply" | "comment_like";
+  type: "follow" | "like" | "comment" | "reply" | "comment_like" | "mention";
   actor: Pick<User, "id" | "username" | "name" | "avatarUrl">;
   postId: number | null;
+  postImageUrl: string | null;
   text: string | null;
   createdAt: Date;
 };
+
+function escapePostgresRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export async function getNotificationsForUser(
   userId: number,
@@ -783,7 +788,75 @@ export async function getNotificationsForUser(
   if (!db) return [];
   const parentComments = alias(comments, "parent_comments");
 
-  const [followEvents, likeEvents, commentEvents, replyEvents, commentLikeEvents] = await Promise.all([
+  const [recipient] = await db
+    .select({ username: users.username })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const mentionPattern = recipient?.username
+    ? `(^|[^[:alnum:]_.])@${escapePostgresRegex(recipient.username)}([^[:alnum:]_.]|$)`
+    : null;
+
+  const postMentionQuery = mentionPattern
+    ? db
+        .select({
+          id: posts.id,
+          postId: posts.id,
+          postImageUrl: posts.imageUrl,
+          text: posts.caption,
+          createdAt: posts.createdAt,
+          actor: {
+            id: users.id,
+            username: users.username,
+            name: users.name,
+            avatarUrl: users.avatarUrl,
+          },
+        })
+        .from(posts)
+        .innerJoin(users, eq(posts.userId, users.id))
+        .where(and(sql`${posts.userId} <> ${userId}`, sql`${posts.caption} ~* ${mentionPattern}`))
+        .orderBy(desc(posts.createdAt))
+        .limit(limit)
+    : Promise.resolve([]);
+
+  const commentMentionQuery = mentionPattern
+    ? db
+        .select({
+          id: comments.id,
+          postId: comments.postId,
+          postImageUrl: posts.imageUrl,
+          text: comments.text,
+          createdAt: comments.createdAt,
+          actor: {
+            id: users.id,
+            username: users.username,
+            name: users.name,
+            avatarUrl: users.avatarUrl,
+          },
+        })
+        .from(comments)
+        .innerJoin(posts, eq(comments.postId, posts.id))
+        .innerJoin(users, eq(comments.userId, users.id))
+        .where(
+          and(
+            sql`${comments.userId} <> ${userId}`,
+            sql`${posts.userId} <> ${userId}`,
+            sql`${comments.text} ~* ${mentionPattern}`,
+          ),
+        )
+        .orderBy(desc(comments.createdAt))
+        .limit(limit)
+    : Promise.resolve([]);
+
+  const [
+    followEvents,
+    likeEvents,
+    commentEvents,
+    replyEvents,
+    commentLikeEvents,
+    postMentionEvents,
+    commentMentionEvents,
+  ] = await Promise.all([
     db
       .select({
         id: follows.id,
@@ -805,6 +878,7 @@ export async function getNotificationsForUser(
       .select({
         id: likes.id,
         postId: likes.postId,
+        postImageUrl: posts.imageUrl,
         createdAt: likes.createdAt,
         actor: {
           id: users.id,
@@ -824,6 +898,7 @@ export async function getNotificationsForUser(
       .select({
         id: comments.id,
         postId: comments.postId,
+        postImageUrl: posts.imageUrl,
         text: comments.text,
         createdAt: comments.createdAt,
         actor: {
@@ -844,6 +919,7 @@ export async function getNotificationsForUser(
       .select({
         id: comments.id,
         postId: comments.postId,
+        postImageUrl: posts.imageUrl,
         text: comments.text,
         createdAt: comments.createdAt,
         actor: {
@@ -872,6 +948,7 @@ export async function getNotificationsForUser(
         id: commentLikes.id,
         commentId: commentLikes.commentId,
         postId: comments.postId,
+        postImageUrl: posts.imageUrl,
         createdAt: commentLikes.createdAt,
         actor: {
           id: users.id,
@@ -882,11 +959,16 @@ export async function getNotificationsForUser(
       })
       .from(commentLikes)
       .innerJoin(comments, eq(commentLikes.commentId, comments.id))
+      .innerJoin(posts, eq(comments.postId, posts.id))
       .innerJoin(users, eq(commentLikes.userId, users.id))
       .where(and(eq(comments.userId, userId), sql`${commentLikes.userId} <> ${userId}`))
       .orderBy(desc(commentLikes.createdAt))
       .limit(limit),
+    postMentionQuery,
+    commentMentionQuery,
   ]);
+
+  const repliedCommentIds = new Set(replyEvents.map((event) => event.id));
 
   return [
     ...followEvents.map((event) => ({
@@ -894,6 +976,7 @@ export async function getNotificationsForUser(
       type: "follow" as const,
       actor: event.actor,
       postId: null,
+      postImageUrl: null,
       text: null,
       createdAt: event.createdAt,
     })),
@@ -902,6 +985,7 @@ export async function getNotificationsForUser(
       type: "like" as const,
       actor: event.actor,
       postId: event.postId,
+      postImageUrl: event.postImageUrl,
       text: null,
       createdAt: event.createdAt,
     })),
@@ -910,6 +994,7 @@ export async function getNotificationsForUser(
       type: "comment" as const,
       actor: event.actor,
       postId: event.postId,
+      postImageUrl: event.postImageUrl,
       text: event.text,
       createdAt: event.createdAt,
     })),
@@ -918,6 +1003,7 @@ export async function getNotificationsForUser(
       type: "reply" as const,
       actor: event.actor,
       postId: event.postId,
+      postImageUrl: event.postImageUrl,
       text: event.text,
       createdAt: event.createdAt,
     })),
@@ -926,9 +1012,30 @@ export async function getNotificationsForUser(
       type: "comment_like" as const,
       actor: event.actor,
       postId: event.postId,
+      postImageUrl: event.postImageUrl,
       text: null,
       createdAt: event.createdAt,
     })),
+    ...postMentionEvents.map((event) => ({
+      id: `mention-post-${event.id}`,
+      type: "mention" as const,
+      actor: event.actor,
+      postId: event.postId,
+      postImageUrl: event.postImageUrl,
+      text: event.text,
+      createdAt: event.createdAt,
+    })),
+    ...commentMentionEvents
+      .filter((event) => !repliedCommentIds.has(event.id))
+      .map((event) => ({
+        id: `mention-comment-${event.id}`,
+        type: "mention" as const,
+        actor: event.actor,
+        postId: event.postId,
+        postImageUrl: event.postImageUrl,
+        text: event.text,
+        createdAt: event.createdAt,
+      })),
   ]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, limit);

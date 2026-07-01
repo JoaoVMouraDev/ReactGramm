@@ -3,6 +3,7 @@ import { getLoginUrl } from "@/const";
 import { useTheme } from "@/contexts/ThemeContext";
 import { trpc } from "@/lib/trpc";
 import {
+  AtSign,
   Bell,
   Compass,
   Heart,
@@ -306,6 +307,8 @@ export function Navbar() {
                         const Icon =
                           notification.type === "follow"
                             ? UserPlus
+                            : notification.type === "mention"
+                              ? AtSign
                             : notification.type === "like" || notification.type === "comment_like"
                               ? Heart
                               : MessageCircle;
@@ -333,6 +336,9 @@ export function Navbar() {
                         } else if (notification.type === "reply") {
                           title = "Nova resposta";
                           text = `${actorName} respondeu seu comentário`;
+                        } else if (notification.type === "mention") {
+                          title = "Nova menção";
+                          text = `${actorName} mencionou você`;
                         }
 
                         const target =
@@ -349,10 +355,27 @@ export function Navbar() {
                               navigate(target);
                               setShowNotifications(false);
                             }}
-                            className="w-full px-4 py-3 flex items-start gap-3 hover:bg-muted transition-colors text-left"
+                            className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted"
                           >
-                            <span className="mt-0.5 w-9 h-9 rounded-full ig-gradient text-white flex items-center justify-center shrink-0">
-                              <Icon size={17} />
+                            <span className="relative h-11 w-11 shrink-0">
+                              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full ig-gradient p-0.5">
+                                <span className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-card text-xs font-bold text-foreground">
+                                  {(actorName[0] ?? "?").toUpperCase()}
+                                  {notification.actor.avatarUrl ? (
+                                    <img
+                                      src={notification.actor.avatarUrl}
+                                      alt=""
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                      onError={(event) => {
+                                        event.currentTarget.style.display = "none";
+                                      }}
+                                    />
+                                  ) : null}
+                                </span>
+                              </span>
+                              <span className="absolute bottom-0 right-0 flex h-5 w-5 items-center justify-center rounded-full border-2 border-card ig-gradient text-white">
+                                <Icon size={10} strokeWidth={2.5} />
+                              </span>
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-semibold">
@@ -362,8 +385,20 @@ export function Navbar() {
                                 {text}
                               </span>
                             </span>
-                            <span className="text-[11px] text-muted-foreground shrink-0">
-                              {formatNotificationTime(notification.createdAt)}
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span className="text-[11px] text-muted-foreground">
+                                {formatNotificationTime(notification.createdAt)}
+                              </span>
+                              {notification.postImageUrl ? (
+                                <img
+                                  src={notification.postImageUrl}
+                                  alt="Post relacionado"
+                                  className="h-11 w-11 rounded-md border border-border object-cover"
+                                  onError={(event) => {
+                                    event.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              ) : null}
                             </span>
                           </button>
                         );
