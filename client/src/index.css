@@ -34,9 +34,8 @@
   --sidebar-border: oklch(0.9 0 0);
   --sidebar-ring: oklch(0.55 0.22 310);
 
-  /* Instagram gradient */
-  --ig-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-  --ig-gradient-soft: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  --ig-gradient: linear-gradient(135deg, #d45cff 0%, #922cff 48%, #5218c9 100%);
+  --ig-gradient-soft: linear-gradient(90deg, #d45cff 0%, #9b35ff 52%, #6622e8 100%);
 }
 
 .dark {
