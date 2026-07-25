@@ -134,6 +134,7 @@ export function PostCard({
     onSuccess: ({ bookmarked }) => {
       setIsBookmarked(bookmarked);
       onBookmarkChange?.(bookmarked);
+      toast.success(bookmarked ? "Você salvou este post" : "Post removido dos salvos");
       utils.bookmarks.list.invalidate();
       utils.posts.feed.invalidate();
       utils.posts.getById.invalidate({ id: post.id });

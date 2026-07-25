@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
-import { ArrowLeft, Hash, ImagePlus, Loader2, X } from "lucide-react";
+import { ArrowLeft, Hash, ImagePlus, Loader2, Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -56,7 +56,7 @@ export default function UploadPost() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
-    if (files.length > 10) {
+    if (mediaFiles.length + files.length > 10) {
       toast.error("Selecione no máximo 10 mídias");
       return;
     }
@@ -69,8 +69,12 @@ export default function UploadPost() {
       toast.error("Cada mídia pode ter no máximo 10MB");
       return;
     }
-    setMediaFiles(files);
-    setMediaPreviews(files.map(file => URL.createObjectURL(file)));
+    setMediaFiles(current => [...current, ...files]);
+    setMediaPreviews(current => [
+      ...current,
+      ...files.map(file => URL.createObjectURL(file)),
+    ]);
+    e.target.value = "";
   };
 
   const handleAddHashtag = () => {
@@ -183,6 +187,16 @@ export default function UploadPost() {
                 className="aspect-square w-full rounded-lg object-cover"
               />
             ))}
+            {mediaFiles.length < 10 && (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                aria-label="Adicionar mais fotos ou GIFs"
+                className="aspect-square w-full rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+              >
+                <Plus size={28} />
+              </button>
+            )}
             <button
               onClick={() => {
                 mediaPreviews.forEach(URL.revokeObjectURL);
