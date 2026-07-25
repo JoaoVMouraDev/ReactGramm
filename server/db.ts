@@ -20,7 +20,9 @@ import {
   follows,
   likes,
   messages,
+  postMedia,
   posts,
+  savedPosts,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -55,7 +57,8 @@ export async function getDb() {
     try {
       const connectionUrl = new URL(connectionString);
       const usesSupabasePooler =
-        connectionUrl.hostname.endsWith(".pooler.supabase.com") && connectionUrl.port === "6543";
+        connectionUrl.hostname.endsWith(".pooler.supabase.com") &&
+        connectionUrl.port === "6543";
       const isVercel = Boolean(process.env.VERCEL);
 
       _db = drizzle(
@@ -64,7 +67,7 @@ export async function getDb() {
           connect_timeout: 5,
           idle_timeout: isVercel ? 5 : 20,
           prepare: !usesSupabasePooler && !isVercel,
-        }),
+        })
       );
     } catch (error) {
       console.error("[Database] Failed to connect:", error);
@@ -146,7 +149,41 @@ export async function ensureDatabaseSchema(): Promise<void> {
     );
   `);
 
-  await db.execute(sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS "parentCommentId" integer;`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS post_media (
+      id serial PRIMARY KEY,
+      "postId" integer NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      url text NOT NULL,
+      key text NOT NULL,
+      type varchar(8) NOT NULL CHECK (type IN ('image', 'gif')),
+      position integer NOT NULL,
+      "createdAt" timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS saved_posts (
+      id serial PRIMARY KEY,
+      "userId" integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "postId" integer NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      "createdAt" timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    INSERT INTO post_media ("postId", url, key, type, position)
+    SELECT id, "imageUrl", "imageKey",
+      CASE WHEN lower("imageUrl") LIKE '%.gif%' THEN 'gif' ELSE 'image' END,
+      0
+    FROM posts
+    WHERE NOT EXISTS (
+      SELECT 1 FROM post_media WHERE post_media."postId" = posts.id
+    );
+  `);
+
+  await db.execute(
+    sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS "parentCommentId" integer;`
+  );
   await db.execute(sql`
     DO $$
     BEGIN
@@ -171,13 +208,42 @@ export async function ensureDatabaseSchema(): Promise<void> {
     );
   `);
 
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "posts_userId_idx" ON posts ("userId");`);
-  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "likes_postId_userId_unique" ON likes ("postId", "userId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "likes_postId_idx" ON likes ("postId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "likes_userId_idx" ON likes ("userId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_postId_idx" ON comments ("postId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_userId_idx" ON comments ("userId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comments_parentCommentId_idx" ON comments ("parentCommentId");`);
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "posts_userId_idx" ON posts ("userId");`
+  );
+  await db.execute(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS "post_media_postId_position_unique" ON post_media ("postId", position);`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "post_media_postId_idx" ON post_media ("postId");`
+  );
+  await db.execute(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS "saved_posts_userId_postId_unique" ON saved_posts ("userId", "postId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "saved_posts_userId_createdAt_idx" ON saved_posts ("userId", "createdAt" DESC);`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "saved_posts_postId_idx" ON saved_posts ("postId");`
+  );
+  await db.execute(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS "likes_postId_userId_unique" ON likes ("postId", "userId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "likes_postId_idx" ON likes ("postId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "likes_userId_idx" ON likes ("userId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "comments_postId_idx" ON comments ("postId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "comments_userId_idx" ON comments ("userId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "comments_parentCommentId_idx" ON comments ("parentCommentId");`
+  );
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS comment_likes (
@@ -187,13 +253,25 @@ export async function ensureDatabaseSchema(): Promise<void> {
       "createdAt" timestamp NOT NULL DEFAULT now()
     );
   `);
-  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "comment_likes_commentId_userId_unique" ON comment_likes ("commentId", "userId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comment_likes_commentId_idx" ON comment_likes ("commentId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "comment_likes_userId_idx" ON comment_likes ("userId");`);
+  await db.execute(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS "comment_likes_commentId_userId_unique" ON comment_likes ("commentId", "userId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "comment_likes_commentId_idx" ON comment_likes ("commentId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "comment_likes_userId_idx" ON comment_likes ("userId");`
+  );
 
-  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "follows_follower_following_unique" ON follows ("followerId", "followingId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "follows_followerId_idx" ON follows ("followerId");`);
-  await db.execute(sql`CREATE INDEX IF NOT EXISTS "follows_followingId_idx" ON follows ("followingId");`);
+  await db.execute(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS "follows_follower_following_unique" ON follows ("followerId", "followingId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "follows_followerId_idx" ON follows ("followerId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "follows_followingId_idx" ON follows ("followingId");`
+  );
 }
 
 // ─── Shared Selects ──────────────────────────────────────────────────────────
@@ -218,7 +296,9 @@ const USER_SELECT = {
   lastSignedIn: users.lastSignedIn,
 };
 
-function shouldBeAdmin(user: Pick<User, "openId" | "username" | "email">): boolean {
+function shouldBeAdmin(
+  user: Pick<User, "openId" | "username" | "email">
+): boolean {
   const username = user.username?.toLowerCase();
   const email = user.email?.toLowerCase();
   return (
@@ -228,7 +308,9 @@ function shouldBeAdmin(user: Pick<User, "openId" | "username" | "email">): boole
   );
 }
 
-async function applyAdminRole(user: User | undefined): Promise<User | undefined> {
+async function applyAdminRole(
+  user: User | undefined
+): Promise<User | undefined> {
   if (!user || user.role === "admin" || !shouldBeAdmin(user)) return user;
 
   const db = await getDb();
@@ -281,10 +363,16 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     .onConflictDoUpdate({ target: users.openId, set: updateSet });
 }
 
-export async function getUserByOpenId(openId: string): Promise<User | undefined> {
+export async function getUserByOpenId(
+  openId: string
+): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
   return applyAdminRole(result[0]);
 }
 
@@ -295,31 +383,53 @@ export async function getUserById(id: number): Promise<User | undefined> {
   return applyAdminRole(result[0]);
 }
 
-export async function getUserByUsername(username: string): Promise<User | undefined> {
+export async function getUserByUsername(
+  username: string
+): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
   return applyAdminRole(result[0]);
 }
 
 export async function getUserByEmail(email: string): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
   return applyAdminRole(result[0]);
 }
 
-export async function getUserByGoogleId(googleId: string): Promise<User | undefined> {
+export async function getUserByGoogleId(
+  googleId: string
+): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.googleId, googleId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.googleId, googleId))
+    .limit(1);
   return result[0];
 }
 
-export async function getUserByGithubId(githubId: string): Promise<User | undefined> {
+export async function getUserByGithubId(
+  githubId: string
+): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.githubId, githubId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.githubId, githubId))
+    .limit(1);
   return result[0];
 }
 
@@ -381,7 +491,10 @@ export async function upsertOAuthUser(data: {
   if (data.email) {
     const byEmail = await getUserByEmail(data.email);
     if (byEmail) {
-      const providerField = data.provider === "google" ? { googleId: data.providerId } : { githubId: data.providerId };
+      const providerField =
+        data.provider === "google"
+          ? { googleId: data.providerId }
+          : { githubId: data.providerId };
       await db
         .update(users)
         .set({ ...providerField, lastSignedIn: new Date() })
@@ -398,9 +511,10 @@ export async function upsertOAuthUser(data: {
     .slice(0, 20);
   const username = `${baseUsername}_${Date.now().toString(36)}`;
 
-  const providerField = data.provider === "google"
-    ? { googleId: data.providerId }
-    : { githubId: data.providerId };
+  const providerField =
+    data.provider === "google"
+      ? { googleId: data.providerId }
+      : { githubId: data.providerId };
 
   await db.insert(users).values({
     openId,
@@ -425,7 +539,12 @@ export async function upsertOAuthUser(data: {
 
 export async function updateUserProfile(
   userId: number,
-  data: { username?: string; bio?: string; avatarUrl?: string; avatarKey?: string }
+  data: {
+    username?: string;
+    bio?: string;
+    avatarUrl?: string;
+    avatarKey?: string;
+  }
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
@@ -439,27 +558,75 @@ export async function searchUsers(query: string, limit = 10): Promise<User[]> {
     .select()
     .from(users)
     .where(
-      or(
-        like(users.username, `%${query}%`),
-        like(users.name, `%${query}%`)
-      )
+      or(like(users.username, `%${query}%`), like(users.name, `%${query}%`))
     )
     .limit(limit);
 }
 
 // ─── Posts ────────────────────────────────────────────────────────────────────
 
-export async function createPost(data: InsertPost): Promise<number> {
+export type PostMediaItem = {
+  id?: number;
+  url: string;
+  key: string;
+  type: "image" | "gif";
+  position: number;
+};
+
+const POST_MEDIA_SELECT = sql<PostMediaItem[]>`
+  COALESCE(
+    (
+      SELECT json_agg(
+        json_build_object(
+          'id', media.id,
+          'url', media.url,
+          'key', media.key,
+          'type', media.type,
+          'position', media.position
+        )
+        ORDER BY media.position
+      )
+      FROM post_media media
+      WHERE media."postId" = ${posts.id}
+    ),
+    '[]'::json
+  )
+`;
+
+export async function createPost(
+  data: InsertPost,
+  media: Omit<PostMediaItem, "id">[] = []
+): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
-  const [created] = await db.insert(posts).values(data).returning({ id: posts.id });
-  return created.id;
+  return db.transaction(async tx => {
+    const [created] = await tx
+      .insert(posts)
+      .values(data)
+      .returning({ id: posts.id });
+    const items = media.length
+      ? media
+      : [
+          {
+            url: data.imageUrl,
+            key: data.imageKey,
+            type: data.imageUrl.toLowerCase().includes(".gif")
+              ? ("gif" as const)
+              : ("image" as const),
+            position: 0,
+          },
+        ];
+    await tx
+      .insert(postMedia)
+      .values(items.map(item => ({ ...item, postId: created.id })));
+    return created.id;
+  });
 }
 
 export async function updatePost(
   postId: number,
   userId: number,
-  data: { caption: string | null; hashtags: string | null },
+  data: { caption: string | null; hashtags: string | null }
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
@@ -480,12 +647,18 @@ export async function deletePost(
   if (!db) return;
   await db
     .delete(posts)
-    .where(isAdmin ? eq(posts.id, postId) : and(eq(posts.id, postId), eq(posts.userId, userId)));
+    .where(
+      isAdmin
+        ? eq(posts.id, postId)
+        : and(eq(posts.id, postId), eq(posts.userId, userId))
+    );
 }
 
 export async function getPostById(
   postId: number
-): Promise<(Post & { user: User; likesCount: number; commentsCount: number }) | undefined> {
+): Promise<
+  (Post & { user: User; likesCount: number; commentsCount: number }) | undefined
+> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
@@ -494,6 +667,7 @@ export async function getPostById(
       userId: posts.userId,
       imageUrl: posts.imageUrl,
       imageKey: posts.imageKey,
+      media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
       likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
@@ -521,6 +695,7 @@ export async function getFeedPosts(
       userId: posts.userId,
       imageUrl: posts.imageUrl,
       imageKey: posts.imageKey,
+      media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
       likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
@@ -550,6 +725,7 @@ export async function getUserPosts(
       userId: posts.userId,
       imageUrl: posts.imageUrl,
       imageKey: posts.imageKey,
+      media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
       createdAt: posts.createdAt,
@@ -561,7 +737,7 @@ export async function getUserPosts(
     .limit(limit)
     .offset(offset);
 
-  const postIds = userPosts.map((post) => post.id);
+  const postIds = userPosts.map(post => post.id);
   if (postIds.length === 0) return [];
 
   const [likeCounts, commentCounts] = await Promise.all([
@@ -583,12 +759,14 @@ export async function getUserPosts(
       .groupBy(comments.postId),
   ]);
 
-  const likesByPost = new Map(likeCounts.map((row) => [row.postId, Number(row.count)]));
+  const likesByPost = new Map(
+    likeCounts.map(row => [row.postId, Number(row.count)])
+  );
   const commentsByPost = new Map(
-    commentCounts.map((row) => [row.postId, Number(row.count)]),
+    commentCounts.map(row => [row.postId, Number(row.count)])
   );
 
-  return userPosts.map((post) => ({
+  return userPosts.map(post => ({
     ...post,
     likesCount: likesByPost.get(post.id) ?? 0,
     commentsCount: commentsByPost.get(post.id) ?? 0,
@@ -608,6 +786,7 @@ export async function getPostsByHashtag(
       userId: posts.userId,
       imageUrl: posts.imageUrl,
       imageKey: posts.imageKey,
+      media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
       likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
@@ -655,7 +834,9 @@ export async function getLikesByPost(postId: number): Promise<Like[]> {
   return db.select().from(likes).where(eq(likes.postId, postId));
 }
 
-export async function getUsersWhoLikedPost(postId: number): Promise<Array<User>> {
+export async function getUsersWhoLikedPost(
+  postId: number
+): Promise<Array<User>> {
   const db = await getDb();
   if (!db) return [];
   return db
@@ -695,7 +876,7 @@ export async function getUserLikedPostIds(
     .select({ postId: likes.postId })
     .from(likes)
     .where(and(eq(likes.userId, userId), inArray(likes.postId, postIds)));
-  return result.map((r) => r.postId);
+  return result.map(r => r.postId);
 }
 
 export async function createComment(data: InsertComment): Promise<number> {
@@ -705,7 +886,12 @@ export async function createComment(data: InsertComment): Promise<number> {
     const [parent] = await db
       .select({ id: comments.id })
       .from(comments)
-      .where(and(eq(comments.id, data.parentCommentId), eq(comments.postId, data.postId)))
+      .where(
+        and(
+          eq(comments.id, data.parentCommentId),
+          eq(comments.postId, data.postId)
+        )
+      )
       .limit(1);
 
     if (!parent) throw new Error("Comentário original não encontrado");
@@ -742,7 +928,78 @@ export async function getCommentsByPost(
     .innerJoin(users, eq(comments.userId, users.id))
     .where(eq(comments.postId, postId))
     .orderBy(comments.createdAt);
-  return result as (Comment & { user: User; likesCount: number; isLiked: boolean })[];
+  return result as (Comment & {
+    user: User;
+    likesCount: number;
+    isLiked: boolean;
+  })[];
+}
+
+export async function getUserSavedPostIds(
+  userId: number,
+  postIds: number[]
+): Promise<number[]> {
+  if (postIds.length === 0) return [];
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db
+    .select({ postId: savedPosts.postId })
+    .from(savedPosts)
+    .where(
+      and(eq(savedPosts.userId, userId), inArray(savedPosts.postId, postIds))
+    );
+  return result.map(row => row.postId);
+}
+
+export async function toggleSavedPost(
+  userId: number,
+  postId: number
+): Promise<{ bookmarked: boolean }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+
+  const existing = await db
+    .select({ id: savedPosts.id })
+    .from(savedPosts)
+    .where(and(eq(savedPosts.userId, userId), eq(savedPosts.postId, postId)))
+    .limit(1);
+
+  if (existing.length) {
+    await db
+      .delete(savedPosts)
+      .where(and(eq(savedPosts.userId, userId), eq(savedPosts.postId, postId)));
+    return { bookmarked: false };
+  }
+
+  await db.insert(savedPosts).values({ userId, postId });
+  return { bookmarked: true };
+}
+
+export async function getSavedPosts(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select({
+      id: posts.id,
+      userId: posts.userId,
+      imageUrl: posts.imageUrl,
+      imageKey: posts.imageKey,
+      media: POST_MEDIA_SELECT,
+      caption: posts.caption,
+      hashtags: posts.hashtags,
+      likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
+      commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+      savedAt: savedPosts.createdAt,
+      user: USER_SELECT,
+    })
+    .from(savedPosts)
+    .innerJoin(posts, eq(savedPosts.postId, posts.id))
+    .innerJoin(users, eq(posts.userId, users.id))
+    .where(eq(savedPosts.userId, userId))
+    .orderBy(desc(savedPosts.createdAt));
 }
 
 export async function toggleCommentLike(
@@ -755,13 +1012,23 @@ export async function toggleCommentLike(
   const existing = await db
     .select()
     .from(commentLikes)
-    .where(and(eq(commentLikes.userId, userId), eq(commentLikes.commentId, commentId)))
+    .where(
+      and(
+        eq(commentLikes.userId, userId),
+        eq(commentLikes.commentId, commentId)
+      )
+    )
     .limit(1);
 
   if (existing.length > 0) {
     await db
       .delete(commentLikes)
-      .where(and(eq(commentLikes.userId, userId), eq(commentLikes.commentId, commentId)));
+      .where(
+        and(
+          eq(commentLikes.userId, userId),
+          eq(commentLikes.commentId, commentId)
+        )
+      );
     return { liked: false };
   }
 
@@ -817,7 +1084,12 @@ export async function getNotificationsForUser(
         })
         .from(posts)
         .innerJoin(users, eq(posts.userId, users.id))
-        .where(and(sql`${posts.userId} <> ${userId}`, sql`${posts.caption} ~* ${mentionPattern}`))
+        .where(
+          and(
+            sql`${posts.userId} <> ${userId}`,
+            sql`${posts.caption} ~* ${mentionPattern}`
+          )
+        )
         .orderBy(desc(posts.createdAt))
         .limit(limit)
     : Promise.resolve([]);
@@ -844,8 +1116,8 @@ export async function getNotificationsForUser(
           and(
             sql`${comments.userId} <> ${userId}`,
             sql`${posts.userId} <> ${userId}`,
-            sql`${comments.text} ~* ${mentionPattern}`,
-          ),
+            sql`${comments.text} ~* ${mentionPattern}`
+          )
         )
         .orderBy(desc(comments.createdAt))
         .limit(limit)
@@ -873,7 +1145,12 @@ export async function getNotificationsForUser(
       })
       .from(follows)
       .innerJoin(users, eq(follows.followerId, users.id))
-      .where(and(eq(follows.followingId, userId), sql`${follows.followerId} <> ${userId}`))
+      .where(
+        and(
+          eq(follows.followingId, userId),
+          sql`${follows.followerId} <> ${userId}`
+        )
+      )
       .orderBy(desc(follows.createdAt))
       .limit(limit),
 
@@ -914,7 +1191,9 @@ export async function getNotificationsForUser(
       .from(comments)
       .innerJoin(posts, eq(comments.postId, posts.id))
       .innerJoin(users, eq(comments.userId, users.id))
-      .where(and(eq(posts.userId, userId), sql`${comments.userId} <> ${userId}`))
+      .where(
+        and(eq(posts.userId, userId), sql`${comments.userId} <> ${userId}`)
+      )
       .orderBy(desc(comments.createdAt))
       .limit(limit),
 
@@ -933,15 +1212,18 @@ export async function getNotificationsForUser(
         },
       })
       .from(comments)
-      .innerJoin(parentComments, eq(comments.parentCommentId, parentComments.id))
+      .innerJoin(
+        parentComments,
+        eq(comments.parentCommentId, parentComments.id)
+      )
       .innerJoin(posts, eq(comments.postId, posts.id))
       .innerJoin(users, eq(comments.userId, users.id))
       .where(
         and(
           eq(parentComments.userId, userId),
           sql`${posts.userId} <> ${userId}`,
-          sql`${comments.userId} <> ${userId}`,
-        ),
+          sql`${comments.userId} <> ${userId}`
+        )
       )
       .orderBy(desc(comments.createdAt))
       .limit(limit),
@@ -964,17 +1246,22 @@ export async function getNotificationsForUser(
       .innerJoin(comments, eq(commentLikes.commentId, comments.id))
       .innerJoin(posts, eq(comments.postId, posts.id))
       .innerJoin(users, eq(commentLikes.userId, users.id))
-      .where(and(eq(comments.userId, userId), sql`${commentLikes.userId} <> ${userId}`))
+      .where(
+        and(
+          eq(comments.userId, userId),
+          sql`${commentLikes.userId} <> ${userId}`
+        )
+      )
       .orderBy(desc(commentLikes.createdAt))
       .limit(limit),
     postMentionQuery,
     commentMentionQuery,
   ]);
 
-  const repliedCommentIds = new Set(replyEvents.map((event) => event.id));
+  const repliedCommentIds = new Set(replyEvents.map(event => event.id));
 
   return [
-    ...followEvents.map((event) => ({
+    ...followEvents.map(event => ({
       id: `follow-${event.id}`,
       type: "follow" as const,
       actor: event.actor,
@@ -983,7 +1270,7 @@ export async function getNotificationsForUser(
       text: null,
       createdAt: event.createdAt,
     })),
-    ...likeEvents.map((event) => ({
+    ...likeEvents.map(event => ({
       id: `like-${event.id}`,
       type: "like" as const,
       actor: event.actor,
@@ -992,7 +1279,7 @@ export async function getNotificationsForUser(
       text: null,
       createdAt: event.createdAt,
     })),
-    ...commentEvents.map((event) => ({
+    ...commentEvents.map(event => ({
       id: `comment-${event.id}`,
       type: "comment" as const,
       actor: event.actor,
@@ -1001,7 +1288,7 @@ export async function getNotificationsForUser(
       text: event.text,
       createdAt: event.createdAt,
     })),
-    ...replyEvents.map((event) => ({
+    ...replyEvents.map(event => ({
       id: `reply-${event.id}`,
       type: "reply" as const,
       actor: event.actor,
@@ -1010,7 +1297,7 @@ export async function getNotificationsForUser(
       text: event.text,
       createdAt: event.createdAt,
     })),
-    ...commentLikeEvents.map((event) => ({
+    ...commentLikeEvents.map(event => ({
       id: `comment-like-${event.id}`,
       type: "comment_like" as const,
       actor: event.actor,
@@ -1019,7 +1306,7 @@ export async function getNotificationsForUser(
       text: null,
       createdAt: event.createdAt,
     })),
-    ...postMentionEvents.map((event) => ({
+    ...postMentionEvents.map(event => ({
       id: `mention-post-${event.id}`,
       type: "mention" as const,
       actor: event.actor,
@@ -1029,8 +1316,8 @@ export async function getNotificationsForUser(
       createdAt: event.createdAt,
     })),
     ...commentMentionEvents
-      .filter((event) => !repliedCommentIds.has(event.id))
-      .map((event) => ({
+      .filter(event => !repliedCommentIds.has(event.id))
+      .map(event => ({
         id: `mention-comment-${event.id}`,
         type: "mention" as const,
         actor: event.actor,
@@ -1055,7 +1342,10 @@ export async function toggleFollow(
     .select()
     .from(follows)
     .where(
-      and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))
+      and(
+        eq(follows.followerId, followerId),
+        eq(follows.followingId, followingId)
+      )
     )
     .limit(1);
 
@@ -1063,7 +1353,10 @@ export async function toggleFollow(
     await db
       .delete(follows)
       .where(
-        and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))
+        and(
+          eq(follows.followerId, followerId),
+          eq(follows.followingId, followingId)
+        )
       );
     return { following: false };
   } else {
@@ -1091,7 +1384,7 @@ export async function getFollowers(userId: number): Promise<User[]> {
     .innerJoin(users, eq(follows.followerId, users.id))
     .where(eq(follows.followingId, userId))
     .orderBy(desc(follows.createdAt));
-  return result.map((row) => row.user as User);
+  return result.map(row => row.user as User);
 }
 
 export async function getFollowingCount(userId: number): Promise<number> {
@@ -1113,7 +1406,7 @@ export async function getFollowing(userId: number): Promise<User[]> {
     .innerJoin(users, eq(follows.followingId, users.id))
     .where(eq(follows.followerId, userId))
     .orderBy(desc(follows.createdAt));
-  return result.map((row) => row.user as User);
+  return result.map(row => row.user as User);
 }
 
 export async function isFollowing(
@@ -1126,7 +1419,10 @@ export async function isFollowing(
     .select()
     .from(follows)
     .where(
-      and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))
+      and(
+        eq(follows.followerId, followerId),
+        eq(follows.followingId, followingId)
+      )
     )
     .limit(1);
   return result.length > 0;
@@ -1142,7 +1438,10 @@ export async function getPostsCount(userId: number): Promise<number> {
   return Number(result[0]?.count ?? 0);
 }
 
-export async function getOrCreateDirectConversation(userId: number, username: string) {
+export async function getOrCreateDirectConversation(
+  userId: number,
+  username: string
+) {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
 
@@ -1179,7 +1478,10 @@ function publicChatUser(user: User) {
   };
 }
 
-export async function isConversationMember(conversationId: number, userId: number) {
+export async function isConversationMember(
+  conversationId: number,
+  userId: number
+) {
   const db = await getDb();
   if (!db) return false;
   const [member] = await db
@@ -1188,8 +1490,8 @@ export async function isConversationMember(conversationId: number, userId: numbe
     .where(
       and(
         eq(conversationMembers.conversationId, conversationId),
-        eq(conversationMembers.userId, userId),
-      ),
+        eq(conversationMembers.userId, userId)
+      )
     )
     .limit(1);
   return Boolean(member);
@@ -1230,7 +1532,7 @@ export async function listConversations(userId: number) {
     WHERE mine."userId" = ${userId}
     ORDER BY COALESCE(latest."createdAt", c."updatedAt") DESC
   `);
-  return Array.from(rows as unknown as Iterable<any>).map((row) => ({
+  return Array.from(rows as unknown as Iterable<any>).map(row => ({
     id: Number(row.id),
     updatedAt: row.updatedAt,
     otherUser: {
@@ -1245,7 +1547,11 @@ export async function listConversations(userId: number) {
   }));
 }
 
-export async function listMessages(conversationId: number, userId: number, limit = 100) {
+export async function listMessages(
+  conversationId: number,
+  userId: number,
+  limit = 100
+) {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
   if (!(await isConversationMember(conversationId, userId))) return null;
@@ -1275,14 +1581,18 @@ export async function createMessage(
   conversationId: number,
   senderId: number,
   text: string,
-  postId?: number,
+  postId?: number
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
   if (!(await isConversationMember(conversationId, senderId))) return null;
 
   if (postId) {
-    const [post] = await db.select({ id: posts.id }).from(posts).where(eq(posts.id, postId)).limit(1);
+    const [post] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
     if (!post) throw new Error("POST_NOT_FOUND");
   }
 
@@ -1297,7 +1607,10 @@ export async function createMessage(
   return message;
 }
 
-export async function markConversationRead(conversationId: number, userId: number) {
+export async function markConversationRead(
+  conversationId: number,
+  userId: number
+) {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
   await db
@@ -1306,8 +1619,8 @@ export async function markConversationRead(conversationId: number, userId: numbe
     .where(
       and(
         eq(conversationMembers.conversationId, conversationId),
-        eq(conversationMembers.userId, userId),
-      ),
+        eq(conversationMembers.userId, userId)
+      )
     );
 }
 

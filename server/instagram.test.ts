@@ -89,6 +89,9 @@ vi.mock("./db", () => ({
   getUserPosts: vi.fn(async () => []),
   getPostsByHashtag: vi.fn(async () => []),
   getUserLikedPostIds: vi.fn(async () => []),
+  getUserSavedPostIds: vi.fn(async () => []),
+  getSavedPosts: vi.fn(async () => []),
+  toggleSavedPost: vi.fn(async () => ({ bookmarked: true })),
   toggleLike: vi.fn(async () => ({ liked: true })),
   getLikesByPost: vi.fn(async () => []),
   createComment: vi.fn(async () => 99),
@@ -121,7 +124,9 @@ function createPublicCtx(): TrpcContext {
   };
 }
 
-function createAuthCtx(overrides: Partial<TrpcContext["user"]> = {}): TrpcContext {
+function createAuthCtx(
+  overrides: Partial<TrpcContext["user"]> = {}
+): TrpcContext {
   return {
     user: {
       id: 1,
@@ -164,7 +169,9 @@ describe("auth", () => {
     const caller = appRouter.createCaller(ctx);
     const result = await caller.auth.logout();
     expect(result.success).toBe(true);
-    expect((ctx.res.clearCookie as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+    expect(
+      (ctx.res.clearCookie as ReturnType<typeof vi.fn>).mock.calls.length
+    ).toBe(1);
   });
 });
 
@@ -217,7 +224,7 @@ describe("posts", () => {
   it("update post requires authentication", async () => {
     const caller = appRouter.createCaller(createPublicCtx());
     await expect(
-      caller.posts.update({ id: 1, caption: "Atualizado", hashtags: ["teste"] }),
+      caller.posts.update({ id: 1, caption: "Atualizado", hashtags: ["teste"] })
     ).rejects.toThrow();
   });
 
@@ -255,25 +262,48 @@ describe("comments", () => {
 
   it("create comment succeeds for authenticated user", async () => {
     const caller = appRouter.createCaller(createAuthCtx());
-    const result = await caller.comments.create({ postId: 1, text: "Great post!" });
+    const result = await caller.comments.create({
+      postId: 1,
+      text: "Great post!",
+    });
     expect(result.id).toBe(99);
   });
 
   it("getByPost returns array", async () => {
     const caller = appRouter.createCaller(createPublicCtx());
-    const result = await caller.comments.getByPost({ postId: 1, limit: 10, offset: 0 });
+    const result = await caller.comments.getByPost({
+      postId: 1,
+      limit: 10,
+      offset: 0,
+    });
     expect(Array.isArray(result)).toBe(true);
   });
 
   it("toggle comment like requires authentication", async () => {
     const caller = appRouter.createCaller(createPublicCtx());
-    await expect(caller.comments.toggleLike({ commentId: 1 })).rejects.toThrow();
+    await expect(
+      caller.comments.toggleLike({ commentId: 1 })
+    ).rejects.toThrow();
   });
 
   it("toggle comment like returns liked status", async () => {
     const caller = appRouter.createCaller(createAuthCtx());
     const result = await caller.comments.toggleLike({ commentId: 1 });
     expect(typeof result.liked).toBe("boolean");
+  });
+});
+
+describe("bookmarks", () => {
+  it("requires authentication", async () => {
+    const caller = appRouter.createCaller(createPublicCtx());
+    await expect(caller.bookmarks.list()).rejects.toThrow();
+  });
+
+  it("toggles a saved post", async () => {
+    const caller = appRouter.createCaller(createAuthCtx());
+    await expect(caller.bookmarks.toggle({ postId: 1 })).resolves.toEqual({
+      bookmarked: true,
+    });
   });
 });
 
@@ -305,7 +335,10 @@ describe("users", () => {
 
   it("search returns empty for no match", async () => {
     const caller = appRouter.createCaller(createPublicCtx());
-    const result = await caller.users.search({ query: "xyz_no_match", limit: 10 });
+    const result = await caller.users.search({
+      query: "xyz_no_match",
+      limit: 10,
+    });
     expect(result).toEqual([]);
   });
 
@@ -320,7 +353,9 @@ describe("users", () => {
 
   it("getProfile throws NOT_FOUND for unknown user", async () => {
     const caller = appRouter.createCaller(createPublicCtx());
-    await expect(caller.users.getProfile({ username: "nobody" })).rejects.toThrow();
+    await expect(
+      caller.users.getProfile({ username: "nobody" })
+    ).rejects.toThrow();
   });
 
   it("updateProfile requires authentication", async () => {
