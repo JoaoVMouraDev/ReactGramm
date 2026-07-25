@@ -4,7 +4,6 @@ import {
   Bookmark,
   Flag,
   Heart,
-  ImageOff,
   Link as LinkIcon,
   MessageCircle,
   MoreHorizontal,
@@ -22,12 +21,14 @@ import { EditPostModal } from "./EditPostModal";
 import { ImageLightbox } from "./ImageLightbox";
 import { MentionText } from "./MentionText";
 import { SharePostDialog } from "./SharePostDialog";
+import { PostCarousel, type PostMedia } from "./PostCarousel";
 
 interface PostCardProps {
   post: {
     id: number;
     userId: number;
     imageUrl: string;
+    media?: PostMedia[];
     caption?: string | null;
     hashtags?: string[];
     likesCount: number;
@@ -45,9 +46,16 @@ interface PostCardProps {
   onDeleted?: () => void;
   onUpdated?: () => void;
   expandableImage?: boolean;
+  onBookmarkChange?: (bookmarked: boolean) => void;
 }
 
-export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }: PostCardProps) {
+export function PostCard({
+  post,
+  onDeleted,
+  onUpdated,
+  expandableImage = false,
+  onBookmarkChange,
+}: PostCardProps) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const [isLiked, setIsLiked] = useState(post.isLiked ?? false);
@@ -59,12 +67,12 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
   const [showLikes, setShowLikes] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImageLightbox, setShowImageLightbox] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState(post.imageUrl);
   const [showShare, setShowShare] = useState(false);
   const [heartAnim, setHeartAnim] = useState(false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
-  const [imageFailed, setImageFailed] = useState(false);
-  
+
   const menuRef = useRef<HTMLDivElement>(null);
   const isOwner = user?.id === post.userId;
   const canDeletePost = isOwner || user?.role === "admin";
@@ -83,7 +91,7 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
       // Invertemos o estado baseando-se no valor anterior (prev)
       setIsLiked(!prevLiked);
       setLikesCount(c => Math.max(0, prevLiked ? c - 1 : c + 1));
-      
+
       if (!prevLiked) {
         setHeartAnim(true);
         setTimeout(() => setHeartAnim(false), 1000);
@@ -96,9 +104,10 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
     },
     onError: (err, variables, context) => {
       const errorMsg = err.message || "";
-      const isDuplicate = errorMsg.includes("Duplicate entry") || 
-                          errorMsg.includes("UNIQUE constraint failed") || 
-                          errorMsg.includes("Failed query: insert into `likes` ");
+      const isDuplicate =
+        errorMsg.includes("Duplicate entry") ||
+        errorMsg.includes("UNIQUE constraint failed") ||
+        errorMsg.includes("Failed query: insert into `likes` ");
 
       if (err.data?.code === "UNAUTHORIZED") {
         toast.error("Sua sessão expirou. Por favor, faça login novamente.");
@@ -107,7 +116,7 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
         // Se o erro for de duplicata, significa que o post JÁ ESTÁ curtido no banco.
         // Mantemos o coração vermelho e garantimos que o contador reflita pelo menos 1
         setIsLiked(true);
-        setLikesCount((prev) => (prev <= 0 ? 1 : prev));
+        setLikesCount(prev => (prev <= 0 ? 1 : prev));
         // Não mostramos erro pro usuário, pois a curtida já existe como desejado.
         utils.posts.feed.invalidate();
       } else {
@@ -121,12 +130,16 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
     },
   });
 
-  // TODO: Implementar o router 'bookmarks' no backend do tRPC e regenerar os tipos.
-  // Por enquanto, a mutação de bookmark está comentada para evitar erros de compilação.
-  // const toggleBookmarkMutation = trpc.bookmarks.toggle?.useMutation({
-  //   onMutate: () => setIsBookmarked(!isBookmarked),
-  //   onError: () => setIsBookmarked(!isBookmarked),
-  // });
+  const toggleBookmarkMutation = trpc.bookmarks.toggle.useMutation({
+    onSuccess: ({ bookmarked }) => {
+      setIsBookmarked(bookmarked);
+      onBookmarkChange?.(bookmarked);
+      utils.bookmarks.list.invalidate();
+      utils.posts.feed.invalidate();
+      utils.posts.getById.invalidate({ id: post.id });
+    },
+    onError: () => toast.error("Não foi possível atualizar os salvos"),
+  });
 
   const deletePostMutation = trpc.posts.delete.useMutation({
     onSuccess: () => {
@@ -152,12 +165,19 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !(menuRef.current as any).contains(e.target as any)) {
+      if (
+        menuRef.current &&
+        !(menuRef.current as any).contains(e.target as any)
+      ) {
         setShowMenu(false);
       }
     };
     (globalThis as any).document?.addEventListener("mousedown", handleClick);
-    return () => (globalThis as any).document?.removeEventListener("mousedown", handleClick);
+    return () =>
+      (globalThis as any).document?.removeEventListener(
+        "mousedown",
+        handleClick
+      );
   }, []);
 
   useEffect(() => {
@@ -165,8 +185,8 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
   }, [post.user?.avatarUrl]);
 
   useEffect(() => {
-    setImageFailed(false);
-  }, [post.imageUrl]);
+    setIsBookmarked(post.isBookmarked ?? false);
+  }, [post.isBookmarked]);
 
   const handleLike = () => {
     if (!user) {
@@ -182,8 +202,8 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
       toast.error("Faça login para salvar posts");
       return;
     }
-    // toggleBookmarkMutation.mutate({ postId: post.id }); // Descomentar quando o backend estiver pronto
-    setIsBookmarked(!isBookmarked); // Apenas para feedback visual temporário
+    if (toggleBookmarkMutation.isPending) return;
+    toggleBookmarkMutation.mutate({ postId: post.id });
   };
 
   const handleDoubleClick = () => {
@@ -192,14 +212,18 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
   };
 
   const handleDelete = () => {
-    if ((globalThis as any).confirm("Tem certeza que deseja deletar este post?")) {
+    if (
+      (globalThis as any).confirm("Tem certeza que deseja deletar este post?")
+    ) {
       deletePostMutation.mutate({ id: post.id });
     }
     setShowMenu(false);
   };
 
   const handleCopyLink = () => {
-    (globalThis as any).navigator?.clipboard?.writeText(`${(globalThis as any).location?.origin}/post/${post.id}`);
+    (globalThis as any).navigator?.clipboard?.writeText(
+      `${(globalThis as any).location?.origin}/post/${post.id}`
+    );
     toast.success("Link copiado!");
     setShowMenu(false);
   };
@@ -219,6 +243,17 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
   };
 
   const username = post.user?.username ?? post.user?.name ?? "usuário";
+  const media =
+    post.media && post.media.length > 0
+      ? post.media
+      : [
+          {
+            url: post.imageUrl,
+            type: post.imageUrl.toLowerCase().includes(".gif")
+              ? ("gif" as const)
+              : ("image" as const),
+          },
+        ];
   const avatarLetter = username[0]?.toUpperCase() ?? "?";
   const visibleComments = (previewComments ?? [])
     .filter((comment: any) => !comment.parentCommentId)
@@ -231,7 +266,9 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
         <div className="px-3 py-3 flex items-center gap-3">
           <UserHoverCard username={post.user?.username ?? ""}>
             <button
-              onClick={() => navigate(`/profile/${post.user?.username ?? post.userId}`)}
+              onClick={() =>
+                navigate(`/profile/${post.user?.username ?? post.userId}`)
+              }
               className="shrink-0"
             >
               <div className="w-9 h-9 rounded-full ig-gradient p-0.5">
@@ -244,7 +281,9 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
                       onError={() => setAvatarFailed(true)}
                     />
                   ) : (
-                    <span className="text-xs font-bold text-foreground">{avatarLetter}</span>
+                    <span className="text-xs font-bold text-foreground">
+                      {avatarLetter}
+                    </span>
                   )}
                 </div>
               </div>
@@ -254,7 +293,9 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
           <div className="flex-1 min-w-0">
             <UserHoverCard username={post.user?.username ?? ""}>
               <button
-                onClick={() => navigate(`/profile/${post.user?.username ?? post.userId}`)}
+                onClick={() =>
+                  navigate(`/profile/${post.user?.username ?? post.userId}`)
+                }
                 className="font-semibold text-sm hover:underline text-left"
               >
                 {username}
@@ -320,28 +361,20 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
           </div>
         </div>
 
-        {/* Image */}
-        <div
-          className="relative flex w-full cursor-pointer items-center justify-center overflow-hidden bg-black"
-          onDoubleClick={handleDoubleClick}
-          onClick={() =>
-            expandableImage ? setShowImageLightbox(true) : navigate(`/post/${post.id}`)
-          }
-        >
-          {imageFailed ? (
-            <div className="flex min-h-80 w-full flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
-              <ImageOff size={32} />
-              <span className="text-sm font-medium">Imagem indisponível</span>
-            </div>
-          ) : (
-            <img
-              src={post.imageUrl}
-              alt=""
-              className="block max-h-[78vh] w-full object-contain object-center"
-              loading="lazy"
-              onError={() => setImageFailed(true)}
-            />
-          )}
+        <div className="relative">
+          <PostCarousel
+            media={media}
+            alt={post.caption ?? "Mídia do post"}
+            onDoubleClick={handleDoubleClick}
+            onMediaClick={item => {
+              if (expandableImage) {
+                setLightboxSrc(item.url);
+                setShowImageLightbox(true);
+              } else {
+                navigate(`/post/${post.id}`);
+              }
+            }}
+          />
           {/* Double-tap heart animation */}
           {heartAnim && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -360,7 +393,9 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
             onClick={handleLike}
             disabled={toggleLikeMutation.isPending}
             className={`transition-colors duration-200 hover:scale-110 ${
-              isLiked ? "text-red-500" : "text-muted-foreground hover:text-red-400"
+              isLiked
+                ? "text-red-500"
+                : "text-muted-foreground hover:text-red-400"
             }`}
           >
             <Heart
@@ -383,8 +418,10 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
             <Send size={24} />
           </button>
           <div className="flex-1" />
-          <button 
+          <button
             onClick={handleSave}
+            disabled={toggleBookmarkMutation.isPending}
+            aria-label={isBookmarked ? "Remover dos salvos" : "Salvar post"}
             className={`transition-all duration-200 hover:scale-110 ${isBookmarked ? "text-foreground" : "text-muted-foreground"}`}
           >
             <Bookmark size={24} fill={isBookmarked ? "currentColor" : "none"} />
@@ -406,7 +443,9 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
           <div className="px-3 pb-2">
             <p className="text-sm">
               <button
-                onClick={() => navigate(`/profile/${post.user?.username ?? post.userId}`)}
+                onClick={() =>
+                  navigate(`/profile/${post.user?.username ?? post.userId}`)
+                }
                 className="font-semibold hover:underline mr-1"
               >
                 {username}
@@ -434,7 +473,7 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
         {/* Hashtags */}
         {post.hashtags && post.hashtags.length > 0 && (
           <div className="px-3 pb-2 flex flex-wrap gap-1">
-            {post.hashtags.map((tag) => (
+            {post.hashtags.map(tag => (
               <button
                 key={tag}
                 onClick={() => navigate(`/hashtag/${tag}`)}
@@ -456,13 +495,18 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
                 <p key={comment.id} className="text-sm leading-snug">
                   <button
                     onClick={() =>
-                      navigate(`/profile/${comment.user?.username ?? comment.userId}`)
+                      navigate(
+                        `/profile/${comment.user?.username ?? comment.userId}`
+                      )
                     }
                     className="font-semibold hover:underline mr-1"
                   >
                     {commentUsername}
                   </button>
-                  <MentionText text={comment.text} className="text-foreground/80 wrap-break-word" />
+                  <MentionText
+                    text={comment.text}
+                    className="text-foreground/80 wrap-break-word"
+                  />
                 </p>
               );
             })}
@@ -481,13 +525,17 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
           </button>
         )}
       </article>
-      <SharePostDialog open={showShare} onOpenChange={setShowShare} postId={post.id} />
+      <SharePostDialog
+        open={showShare}
+        onOpenChange={setShowShare}
+        postId={post.id}
+      />
 
       <CommentsDrawer
         postId={post.id}
         open={showComments}
         onClose={() => setShowComments(false)}
-        onCommentAdded={() => setCommentsCount((c) => c + 1)}
+        onCommentAdded={() => setCommentsCount(c => c + 1)}
       />
       {showLikes ? (
         <LikeListModal postId={post.id} onClose={() => setShowLikes(false)} />
@@ -501,7 +549,7 @@ export function PostCard({ post, onDeleted, onUpdated, expandableImage = false }
       ) : null}
       {showImageLightbox ? (
         <ImageLightbox
-          src={post.imageUrl}
+          src={lightboxSrc}
           alt={post.caption ?? "Imagem do post"}
           onClose={() => setShowImageLightbox(false)}
         />

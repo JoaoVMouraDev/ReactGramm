@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import {
   AtSign,
   Bell,
+  Bookmark,
   Compass,
   Heart,
   Home,
@@ -71,7 +72,7 @@ export function Navbar() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [seenNotificationIds, setSeenNotificationIds] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set()
   );
   const searchRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -79,20 +80,23 @@ export function Navbar() {
 
   const { data: searchResults } = trpc.users.search.useQuery(
     { query: searchQuery, limit: 8 },
-    { enabled: searchQuery.length >= 1 },
+    { enabled: searchQuery.length >= 1 }
   );
 
   const { data: notifications = [], isLoading: notificationsLoading } =
     trpc.notifications.list.useQuery(
       { limit: 20 },
-      { enabled: Boolean(user), refetchInterval: 15000 },
+      { enabled: Boolean(user), refetchInterval: 15000 }
     );
-  const { data: unreadMessages = 0 } = trpc.messages.unreadCount.useQuery(undefined, {
-    enabled: Boolean(user),
-    refetchInterval: 10000,
-  });
+  const { data: unreadMessages = 0 } = trpc.messages.unreadCount.useQuery(
+    undefined,
+    {
+      enabled: Boolean(user),
+      refetchInterval: 10000,
+    }
+  );
   const unreadNotificationsCount = notifications.filter(
-    (notification) => !seenNotificationIds.has(notification.id),
+    notification => !seenNotificationIds.has(notification.id)
   ).length;
 
   useEffect(() => {
@@ -113,14 +117,14 @@ export function Navbar() {
   const markNotificationsAsSeen = () => {
     if (!user?.id || notifications.length === 0) return;
 
-    setSeenNotificationIds((current) => {
+    setSeenNotificationIds(current => {
       const next = new Set(current);
       for (const notification of notifications) {
         next.add(notification.id);
       }
       safeSetItem(
         getSeenNotificationsKey(user.id),
-        JSON.stringify(Array.from(next).slice(-100)),
+        JSON.stringify(Array.from(next).slice(-100))
       );
       return next;
     });
@@ -143,7 +147,10 @@ export function Navbar() {
       ) {
         setShowNotifications(false);
       }
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(e.target as Node)
+      ) {
         setShowUserMenu(false);
       }
     };
@@ -162,7 +169,10 @@ export function Navbar() {
           ReactGram
         </button>
 
-        <div ref={searchRef} className="relative flex-1 max-w-xs hidden sm:block">
+        <div
+          ref={searchRef}
+          className="relative flex-1 max-w-xs hidden sm:block"
+        >
           <div className="relative">
             <Search
               size={16}
@@ -172,7 +182,7 @@ export function Navbar() {
               type="text"
               placeholder="Buscar..."
               value={searchQuery}
-              onChange={(e) => {
+              onChange={e => {
                 setSearchQuery(e.target.value);
                 setShowSearch(true);
               }}
@@ -188,7 +198,7 @@ export function Navbar() {
                   Nenhum resultado
                 </p>
               ) : (
-                searchResults.map((result) => (
+                searchResults.map(result => (
                   <button
                     key={result.id}
                     onClick={() => {
@@ -206,7 +216,9 @@ export function Navbar() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        (result.username ?? result.name ?? "?")[0]?.toUpperCase()
+                        (result.username ??
+                          result.name ??
+                          "?")[0]?.toUpperCase()
                       )}
                     </div>
                     <div className="min-w-0">
@@ -276,7 +288,7 @@ export function Navbar() {
             <div ref={notificationsRef} className="relative">
               <button
                 onClick={() => {
-                  setShowNotifications((value) => {
+                  setShowNotifications(value => {
                     const nextValue = !value;
                     if (nextValue) markNotificationsAsSeen();
                     return nextValue;
@@ -288,7 +300,9 @@ export function Navbar() {
                 <Bell size={20} />
                 {unreadNotificationsCount > 0 && (
                   <span className="absolute right-1.5 top-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-4 text-center">
-                    {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
+                    {unreadNotificationsCount > 9
+                      ? "9+"
+                      : unreadNotificationsCount}
                   </span>
                 )}
               </button>
@@ -312,15 +326,16 @@ export function Navbar() {
                         Nenhuma notificação ainda
                       </p>
                     ) : (
-                      notifications.map((notification) => {
+                      notifications.map(notification => {
                         const Icon =
                           notification.type === "follow"
                             ? UserPlus
                             : notification.type === "mention"
                               ? AtSign
-                            : notification.type === "like" || notification.type === "comment_like"
-                              ? Heart
-                              : MessageCircle;
+                              : notification.type === "like" ||
+                                  notification.type === "comment_like"
+                                ? Heart
+                                : MessageCircle;
                         const actorName =
                           notification.actor.username ??
                           notification.actor.name ??
@@ -375,8 +390,9 @@ export function Navbar() {
                                       src={notification.actor.avatarUrl}
                                       alt=""
                                       className="absolute inset-0 h-full w-full object-cover"
-                                      onError={(event) => {
-                                        event.currentTarget.style.display = "none";
+                                      onError={event => {
+                                        event.currentTarget.style.display =
+                                          "none";
                                       }}
                                     />
                                   ) : null}
@@ -403,7 +419,7 @@ export function Navbar() {
                                   src={notification.postImageUrl}
                                   alt="Post relacionado"
                                   className="h-11 w-11 rounded-md border border-border object-cover"
-                                  onError={(event) => {
+                                  onError={event => {
                                     event.currentTarget.style.display = "none";
                                   }}
                                 />
@@ -453,6 +469,16 @@ export function Navbar() {
                   >
                     <User size={16} className="text-muted-foreground" />
                     <span className="text-sm font-medium">Meu perfil</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigate("/saved");
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted transition-colors text-left border-b border-border"
+                  >
+                    <Bookmark size={16} className="text-muted-foreground" />
+                    <span className="text-sm font-medium">Posts salvos</span>
                   </button>
                   <button
                     onClick={() => {

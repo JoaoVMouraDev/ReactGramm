@@ -14,8 +14,8 @@ export default function UploadPost() {
   const fileRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
   const [hashtagInput, setHashtagInput] = useState("");
   const [hashtags, setHashtags] = useState<string[]>([]);
@@ -28,7 +28,7 @@ export default function UploadPost() {
       toast.success("Post publicado!");
       navigate("/");
     },
-    onError: (err) => {
+    onError: err => {
       if (err.data?.code === "UNAUTHORIZED") {
         toast.error("Sua sessão expirou. Por favor, faça login novamente.");
         navigate("/login");
@@ -54,20 +54,23 @@ export default function UploadPost() {
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = (e.target as any).files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Selecione uma imagem válida");
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    if (files.length > 10) {
+      toast.error("Selecione no máximo 10 mídias");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Imagem muito grande. Máximo 10MB.");
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (files.some(file => !allowedTypes.includes(file.type))) {
+      toast.error("Use apenas JPG, PNG, WEBP ou GIF");
       return;
     }
-    setImageFile(file);
-    const reader = new (globalThis as any).FileReader();
-    reader.onload = (ev: any) => setImagePreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    if (files.some(file => file.size > 10 * 1024 * 1024)) {
+      toast.error("Cada mídia pode ter no máximo 10MB");
+      return;
+    }
+    setMediaFiles(files);
+    setMediaPreviews(files.map(file => URL.createObjectURL(file)));
   };
 
   const handleAddHashtag = () => {
@@ -86,25 +89,41 @@ export default function UploadPost() {
   };
 
   const handleRemoveHashtag = (tag: string) => {
-    setHashtags(hashtags.filter((h) => h !== tag));
+    setHashtags(hashtags.filter(h => h !== tag));
   };
 
   const handleSubmit = async () => {
-    if (!imageFile) {
-      toast.error("Selecione uma imagem");
+    if (!mediaFiles.length) {
+      toast.error("Selecione ao menos uma mídia");
       return;
     }
     setUploading(true);
     try {
-      const base64 = await fileToBase64(imageFile);
-      const { url, key } = await uploadImageMutation.mutateAsync({
-        filename: imageFile.name,
-        contentType: imageFile.type,
-        base64,
-      });
+      const uploaded = [];
+      for (let position = 0; position < mediaFiles.length; position += 1) {
+        const file = mediaFiles[position];
+        const base64 = await fileToBase64(file);
+        const result = await uploadImageMutation.mutateAsync({
+          filename: file.name,
+          contentType: file.type as
+            | "image/jpeg"
+            | "image/png"
+            | "image/webp"
+            | "image/gif",
+          base64,
+        });
+        uploaded.push({
+          ...result,
+          type:
+            file.type === "image/gif" ? ("gif" as const) : ("image" as const),
+          position,
+        });
+      }
+      const first = uploaded[0];
       await createPostMutation.mutateAsync({
-        imageUrl: url,
-        imageKey: key,
+        imageUrl: first.url,
+        imageKey: first.key,
+        media: uploaded,
         caption: caption.trim() || undefined,
         hashtags: hashtags.length > 0 ? hashtags : undefined,
       });
@@ -116,7 +135,8 @@ export default function UploadPost() {
     }
   };
 
-  const isLoading = uploading || uploadImageMutation.isPending || createPostMutation.isPending;
+  const isLoading =
+    uploading || uploadImageMutation.isPending || createPostMutation.isPending;
 
   return (
     <div className="min-h-screen bg-background">
@@ -135,7 +155,7 @@ export default function UploadPost() {
         </div>
 
         {/* Image picker */}
-        {!imagePreview ? (
+        {mediaPreviews.length === 0 ? (
           <button
             onClick={() => (fileRef.current as any)?.click()}
             className="w-full aspect-square border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center gap-4 hover:border-primary hover:bg-primary/5 transition-all group"
@@ -144,26 +164,30 @@ export default function UploadPost() {
               <ImagePlus size={28} className="text-white" />
             </div>
             <div className="text-center">
-              <p className="font-semibold text-base">Adicionar foto</p>
+              <p className="font-semibold text-base">Adicionar fotos ou GIFs</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Clique para selecionar uma imagem
+                Selecione até 10 mídias
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                JPG, PNG, WEBP • Máx. 10MB
+                JPG, PNG, WEBP ou GIF • Máx. 10MB cada
               </p>
             </div>
           </button>
         ) : (
-          <div className="relative rounded-2xl overflow-hidden mb-4">
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="w-full aspect-square object-cover"
-            />
+          <div className="relative mb-4 grid grid-cols-3 gap-2 rounded-2xl bg-muted p-2">
+            {mediaPreviews.map((preview, index) => (
+              <img
+                key={preview}
+                src={preview}
+                alt={`Preview ${index + 1}`}
+                className="aspect-square w-full rounded-lg object-cover"
+              />
+            ))}
             <button
               onClick={() => {
-                setImagePreview(null);
-                setImageFile(null);
+                mediaPreviews.forEach(URL.revokeObjectURL);
+                setMediaPreviews([]);
+                setMediaFiles([]);
                 if (fileRef.current) (fileRef.current as any).value = "";
               }}
               className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
@@ -176,7 +200,8 @@ export default function UploadPost() {
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          multiple
           className="hidden"
           onChange={handleFileChange}
         />
@@ -192,7 +217,9 @@ export default function UploadPost() {
             rows={4}
             className="w-full px-4 py-3 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none"
           />
-          <p className="text-xs text-muted-foreground text-right">{caption.length}/2200</p>
+          <p className="text-xs text-muted-foreground text-right">
+            {caption.length}/2200
+          </p>
         </div>
 
         {/* Hashtags */}
@@ -207,10 +234,12 @@ export default function UploadPost() {
               <input
                 type="text"
                 value={hashtagInput}
-                onChange={(e) =>
-                  setHashtagInput((e.target as any).value.replace(/[^a-zA-Z0-9_]/g, ""))
+                onChange={e =>
+                  setHashtagInput(
+                    (e.target as any).value.replace(/[^a-zA-Z0-9_]/g, "")
+                  )
                 }
-                onKeyDown={(e) => {
+                onKeyDown={e => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     handleAddHashtag();
@@ -230,7 +259,7 @@ export default function UploadPost() {
           </div>
           {hashtags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
-              {hashtags.map((tag) => (
+              {hashtags.map(tag => (
                 <span
                   key={tag}
                   className="flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium"
@@ -251,7 +280,7 @@ export default function UploadPost() {
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          disabled={!imageFile || isLoading}
+          disabled={!mediaFiles.length || isLoading}
           className="w-full mt-6 py-3 rounded-xl ig-gradient text-white font-semibold text-base disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
         >
           {isLoading ? (
@@ -264,7 +293,6 @@ export default function UploadPost() {
           )}
         </button>
       </main>
-
     </div>
   );
 }

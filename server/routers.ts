@@ -17,12 +17,15 @@ import {
   getUserById,
   getUserByUsername,
   getUserLikedPostIds,
+  getUserSavedPostIds,
   getUserPosts,
+  getSavedPosts,
   isFollowing,
   searchUsers,
   toggleCommentLike,
   toggleFollow,
   toggleLike,
+  toggleSavedPost,
   updatePost,
   updateUserProfile,
   getCommentsByPost,
@@ -35,22 +38,33 @@ import {
   listMessages,
   markConversationRead,
 } from "./db";
-import { getSessionCookieOptions } from "./_core/cookies.ts";       
+import { getSessionCookieOptions } from "./_core/cookies.ts";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
-import { hashPassword, verifyPassword, validatePasswordStrength, validateEmail, validateUsername } from "./auth.ts"; 
-import { users } from "../drizzle/schema.ts";                      
+import {
+  hashPassword,
+  verifyPassword,
+  validatePasswordStrength,
+  validateEmail,
+  validateUsername,
+} from "./auth.ts";
+import { users } from "../drizzle/schema.ts";
 import { eq } from "drizzle-orm";
-import { getDb, getUserByEmail, getUserByUsername as getUserByUsernameDb, createUserWithEmail } from "./db.ts";
-import { sdk } from "./_core/sdk.ts";                                
+import {
+  getDb,
+  getUserByEmail,
+  getUserByUsername as getUserByUsernameDb,
+  createUserWithEmail,
+} from "./db.ts";
+import { sdk } from "./_core/sdk.ts";
 // IMPORTANTE: Ajuste o caminho abaixo para onde sua função de upload realmente está
-import { storagePut } from "./storage.ts"; 
+import { storagePut } from "./storage.ts";
 
 // Constantes necessárias para a sessão
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
-const COOKIE_NAME = "app_session_id"; 
+const COOKIE_NAME = "app_session_id";
 
 // ─── Upload Router ─────────────────────────────────────────────────────────────
 
@@ -59,7 +73,12 @@ const uploadRouter = router({
     .input(
       z.object({
         filename: z.string(),
-        contentType: z.string(),
+        contentType: z.enum([
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/gif",
+        ]),
         base64: z.string(),
       })
     )
@@ -92,18 +111,25 @@ const uploadRouter = router({
 
 const postsRouter = router({
   feed: publicProcedure
-    .input(z.object({ limit: z.number().default(20), offset: z.number().default(0) }))
+    .input(
+      z.object({ limit: z.number().default(20), offset: z.number().default(0) })
+    )
     .query(async ({ input, ctx }) => {
       const feedPosts = await getFeedPosts(input.limit, input.offset);
       let likedPostIds: number[] = [];
+      let savedPostIds: number[] = [];
       if (ctx.user) {
-        const ids = feedPosts.map((p) => p.id);
-        likedPostIds = await getUserLikedPostIds(ctx.user.id, ids);
+        const ids = feedPosts.map(p => p.id);
+        [likedPostIds, savedPostIds] = await Promise.all([
+          getUserLikedPostIds(ctx.user.id, ids),
+          getUserSavedPostIds(ctx.user.id, ids),
+        ]);
       }
-      return feedPosts.map((p) => ({
+      return feedPosts.map(p => ({
         ...p,
         hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
         isLiked: likedPostIds.includes(p.id),
+        isBookmarked: savedPostIds.includes(p.id),
       }));
     }),
 
@@ -112,18 +138,33 @@ const postsRouter = router({
       z.object({
         imageUrl: z.string(),
         imageKey: z.string(),
+        media: z
+          .array(
+            z.object({
+              url: z.string(),
+              key: z.string(),
+              type: z.enum(["image", "gif"]),
+              position: z.number().int().min(0),
+            })
+          )
+          .min(1)
+          .max(10)
+          .optional(),
         caption: z.string().optional(),
         hashtags: z.array(z.string()).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const postId = await createPost({
-        userId: ctx.user.id,
-        imageUrl: input.imageUrl,
-        imageKey: input.imageKey,
-        caption: input.caption ?? null,
-        hashtags: input.hashtags ? JSON.stringify(input.hashtags) : null,
-      });
+      const postId = await createPost(
+        {
+          userId: ctx.user.id,
+          imageUrl: input.imageUrl,
+          imageKey: input.imageKey,
+          caption: input.caption ?? null,
+          hashtags: input.hashtags ? JSON.stringify(input.hashtags) : null,
+        },
+        input.media
+      );
       return { id: postId };
     }),
 
@@ -133,7 +174,7 @@ const postsRouter = router({
         id: z.number(),
         caption: z.string().max(2200),
         hashtags: z.array(z.string().min(1).max(50)).max(10),
-      }),
+      })
     )
     .mutation(async ({ input, ctx }) => {
       const updated = await updatePost(input.id, ctx.user.id, {
@@ -141,7 +182,10 @@ const postsRouter = router({
         hashtags: input.hashtags.length ? JSON.stringify(input.hashtags) : null,
       });
       if (!updated) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Você não pode editar este post" });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não pode editar este post",
+        });
       }
       return { success: true };
     }),
@@ -154,10 +198,14 @@ const postsRouter = router({
       const likedPostIds = ctx.user
         ? await getUserLikedPostIds(ctx.user.id, [post.id])
         : [];
+      const savedPostIds = ctx.user
+        ? await getUserSavedPostIds(ctx.user.id, [post.id])
+        : [];
       return {
         ...post,
         hashtags: post.hashtags ? JSON.parse(post.hashtags) : [],
         isLiked: likedPostIds.includes(post.id),
+        isBookmarked: savedPostIds.includes(post.id),
       };
     }),
 
@@ -177,13 +225,17 @@ const postsRouter = router({
       })
     )
     .query(async ({ input, ctx }) => {
-      const userPosts = await getUserPosts(input.userId, input.limit, input.offset);
+      const userPosts = await getUserPosts(
+        input.userId,
+        input.limit,
+        input.offset
+      );
       let likedPostIds: number[] = [];
       if (ctx.user) {
-        const ids = userPosts.map((p) => p.id);
+        const ids = userPosts.map(p => p.id);
         likedPostIds = await getUserLikedPostIds(ctx.user.id, ids);
       }
-      return userPosts.map((p) => ({
+      return userPosts.map(p => ({
         ...p,
         hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
         isLiked: likedPostIds.includes(p.id),
@@ -199,8 +251,12 @@ const postsRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const tagPosts = await getPostsByHashtag(input.hashtag, input.limit, input.offset);
-      return tagPosts.map((p) => ({
+      const tagPosts = await getPostsByHashtag(
+        input.hashtag,
+        input.limit,
+        input.offset
+      );
+      return tagPosts.map(p => ({
         ...p,
         hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
       }));
@@ -288,22 +344,34 @@ const authRouter = router({
 
       const passwordValidation = validatePasswordStrength(input.password);
       if (!passwordValidation.isValid) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: passwordValidation.errors[0] });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: passwordValidation.errors[0],
+        });
       }
 
       const usernameValidation = validateUsername(input.username);
       if (!usernameValidation.isValid) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: usernameValidation.errors[0] });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: usernameValidation.errors[0],
+        });
       }
 
       const existingEmail = await getUserByEmail(input.email);
       if (existingEmail) {
-        throw new TRPCError({ code: "CONFLICT", message: "Email já cadastrado" });
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Email já cadastrado",
+        });
       }
 
       const existingUsername = await getUserByUsernameDb(input.username);
       if (existingUsername) {
-        throw new TRPCError({ code: "CONFLICT", message: "Username já cadastrado" });
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Username já cadastrado",
+        });
       }
 
       const passwordHash = hashPassword(input.password);
@@ -320,7 +388,10 @@ const authRouter = router({
         expiresInMs: ONE_YEAR_MS,
       });
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      (ctx.res as any).cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      (ctx.res as any).cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
 
       return { success: true };
     }),
@@ -336,16 +407,28 @@ const authRouter = router({
       const foundUser = await getUserByEmail(input.email);
 
       if (!foundUser) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Email ou senha inválidos" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Email ou senha inválidos",
+        });
       }
 
-      if (!foundUser.passwordHash || !verifyPassword(input.password, foundUser.passwordHash)) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Email ou senha inválidos" });
+      if (
+        !foundUser.passwordHash ||
+        !verifyPassword(input.password, foundUser.passwordHash)
+      ) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Email ou senha inválidos",
+        });
       }
 
       const db = await getDb();
       if (db) {
-        await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, foundUser.id));
+        await db
+          .update(users)
+          .set({ lastSignedIn: new Date() })
+          .where(eq(users.id, foundUser.id));
       }
 
       // Create session cookie so the user is immediately authenticated
@@ -354,7 +437,10 @@ const authRouter = router({
         expiresInMs: ONE_YEAR_MS,
       });
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      (ctx.res as any).cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      (ctx.res as any).cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
 
       return { success: true };
     }),
@@ -367,7 +453,10 @@ const followsRouter = router({
     .input(z.object({ userId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       if (input.userId === ctx.user.id) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot follow yourself" });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot follow yourself",
+        });
       }
       return toggleFollow(ctx.user.id, input.userId);
     }),
@@ -375,7 +464,9 @@ const followsRouter = router({
   isFollowing: publicProcedure
     .input(z.object({ followerId: z.number(), followingId: z.number() }))
     .query(async ({ input }) => {
-      return { following: await isFollowing(input.followerId, input.followingId) };
+      return {
+        following: await isFollowing(input.followerId, input.followingId),
+      };
     }),
 
   getFollowersCount: publicProcedure
@@ -395,16 +486,17 @@ const followsRouter = router({
     .query(async ({ input, ctx }) => {
       const people = await getFollowers(input.userId);
       return Promise.all(
-        people.map(async (person) => ({
+        people.map(async person => ({
           id: person.id,
           username: person.username,
           name: person.name,
           avatarUrl: person.avatarUrl,
           isFollowing: ctx.user
-            ? ctx.user.id === person.id || (await isFollowing(ctx.user.id, person.id))
+            ? ctx.user.id === person.id ||
+              (await isFollowing(ctx.user.id, person.id))
             : false,
           isCurrentUser: ctx.user?.id === person.id,
-        })),
+        }))
       );
     }),
 
@@ -413,16 +505,17 @@ const followsRouter = router({
     .query(async ({ input, ctx }) => {
       const people = await getFollowing(input.userId);
       return Promise.all(
-        people.map(async (person) => ({
+        people.map(async person => ({
           id: person.id,
           username: person.username,
           name: person.name,
           avatarUrl: person.avatarUrl,
           isFollowing: ctx.user
-            ? ctx.user.id === person.id || (await isFollowing(ctx.user.id, person.id))
+            ? ctx.user.id === person.id ||
+              (await isFollowing(ctx.user.id, person.id))
             : false,
           isCurrentUser: ctx.user?.id === person.id,
-        })),
+        }))
       );
     }),
 });
@@ -437,6 +530,26 @@ const notificationsRouter = router({
     }),
 });
 
+const bookmarksRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const saved = await getSavedPosts(ctx.user.id);
+    const likedPostIds = await getUserLikedPostIds(
+      ctx.user.id,
+      saved.map(post => post.id)
+    );
+    return saved.map(post => ({
+      ...post,
+      hashtags: post.hashtags ? JSON.parse(post.hashtags) : [],
+      isLiked: likedPostIds.includes(post.id),
+      isBookmarked: true,
+    }));
+  }),
+
+  toggle: protectedProcedure
+    .input(z.object({ postId: z.number() }))
+    .mutation(({ input, ctx }) => toggleSavedPost(ctx.user.id, input.postId)),
+});
+
 function getAbly() {
   const key = process.env.ABLY_API_KEY;
   return key ? new Ably.Rest({ key }) : null;
@@ -444,7 +557,7 @@ function getAbly() {
 
 const messagesRouter = router({
   listConversations: protectedProcedure.query(({ ctx }) =>
-    listConversations(ctx.user.id),
+    listConversations(ctx.user.id)
   ),
 
   openDirect: protectedProcedure
@@ -454,10 +567,16 @@ const messagesRouter = router({
         return await getOrCreateDirectConversation(ctx.user.id, input.username);
       } catch (error) {
         if (error instanceof Error && error.message === "USER_NOT_FOUND") {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Perfil não encontrado" });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Perfil não encontrado",
+          });
         }
         if (error instanceof Error && error.message === "SELF_CONVERSATION") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode conversar consigo" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Você não pode conversar consigo",
+          });
         }
         throw error;
       }
@@ -473,13 +592,15 @@ const messagesRouter = router({
 
   send: protectedProcedure
     .input(
-      z.object({
-        conversationId: z.number().int().positive(),
-        text: z.string().trim().max(2000).default(""),
-        postId: z.number().int().positive().optional(),
-      }).refine((value) => value.text.length > 0 || Boolean(value.postId), {
-        message: "Escreva uma mensagem ou escolha uma publicação",
-      }),
+      z
+        .object({
+          conversationId: z.number().int().positive(),
+          text: z.string().trim().max(2000).default(""),
+          postId: z.number().int().positive().optional(),
+        })
+        .refine(value => value.text.length > 0 || Boolean(value.postId), {
+          message: "Escreva uma mensagem ou escolha uma publicação",
+        })
     )
     .mutation(async ({ input, ctx }) => {
       let message;
@@ -488,11 +609,14 @@ const messagesRouter = router({
           input.conversationId,
           ctx.user.id,
           input.text,
-          input.postId,
+          input.postId
         );
       } catch (error) {
         if (error instanceof Error && error.message === "POST_NOT_FOUND") {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Publicação não encontrada" });
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Publicação não encontrada",
+          });
         }
         throw error;
       }
@@ -501,7 +625,9 @@ const messagesRouter = router({
       const ably = getAbly();
       if (ably) {
         try {
-          await ably.channels.get(`conversation:${input.conversationId}`).publish("message", message);
+          await ably.channels
+            .get(`conversation:${input.conversationId}`)
+            .publish("message", message);
         } catch (error) {
           console.error("[Chat] Realtime publish failed:", error);
         }
@@ -519,17 +645,19 @@ const messagesRouter = router({
       return { success: true };
     }),
 
-  unreadCount: protectedProcedure.query(({ ctx }) => getUnreadMessageCount(ctx.user.id)),
+  unreadCount: protectedProcedure.query(({ ctx }) =>
+    getUnreadMessageCount(ctx.user.id)
+  ),
 
   realtimeToken: protectedProcedure.query(async ({ ctx }) => {
     const ably = getAbly();
     if (!ably) return null;
     const conversationsForUser = await listConversations(ctx.user.id);
     const capability = Object.fromEntries(
-      conversationsForUser.map((conversation) => [
+      conversationsForUser.map(conversation => [
         `conversation:${conversation.id}`,
         ["subscribe"],
-      ]),
+      ])
     );
     return ably.auth.requestToken({
       clientId: `user:${ctx.user.id}`,
@@ -544,7 +672,8 @@ const usersRouter = router({
     .input(z.object({ username: z.string() }))
     .query(async ({ input, ctx }) => {
       const user = await getUserByUsername(input.username);
-      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      if (!user)
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
 
       const [followersCount, followingCount, postsCount] = await Promise.all([
         getFollowersCount(user.id),
@@ -580,7 +709,8 @@ const usersRouter = router({
     .input(z.object({ id: z.number() }))
     .query(async ({ input, ctx }) => {
       const user = await getUserById(input.id);
-      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      if (!user)
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
 
       const [followersCount, followingCount, postsCount] = await Promise.all([
         getFollowersCount(user.id),
@@ -615,7 +745,12 @@ const usersRouter = router({
   updateProfile: protectedProcedure
     .input(
       z.object({
-        username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/).optional(),
+        username: z
+          .string()
+          .min(3)
+          .max(30)
+          .regex(/^[a-zA-Z0-9_.]+$/)
+          .optional(),
         bio: z.string().max(150).optional(),
         avatarUrl: z.string().optional(),
         avatarKey: z.string().optional(),
@@ -625,7 +760,10 @@ const usersRouter = router({
       if (input.username) {
         const existing = await getUserByUsername(input.username);
         if (existing && existing.id !== ctx.user.id) {
-          throw new TRPCError({ code: "CONFLICT", message: "Username already taken" });
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Username already taken",
+          });
         }
       }
       await updateUserProfile(ctx.user.id, input);
@@ -633,10 +771,12 @@ const usersRouter = router({
     }),
 
   search: publicProcedure
-    .input(z.object({ query: z.string().min(1), limit: z.number().default(10) }))
+    .input(
+      z.object({ query: z.string().min(1), limit: z.number().default(10) })
+    )
     .query(async ({ input }) => {
       const results = await searchUsers(input.query, input.limit);
-      return results.map((u) => ({
+      return results.map(u => ({
         id: u.id,
         username: u.username,
         name: u.name,
@@ -653,15 +793,21 @@ const usersRouter = router({
         getPostsByHashtag(input.query.replace(/^#/, ""), input.limit, 0),
       ]);
       return {
-        users: userResults.map((u) => ({
+        users: userResults.map(u => ({
           id: u.id,
           username: u.username,
           name: u.name,
           avatarUrl: u.avatarUrl,
         })),
-        hashtags: hashtagPosts.length > 0
-          ? [{ tag: input.query.replace(/^#/, ""), postsCount: hashtagPosts.length }]
-          : [],
+        hashtags:
+          hashtagPosts.length > 0
+            ? [
+                {
+                  tag: input.query.replace(/^#/, ""),
+                  postsCount: hashtagPosts.length,
+                },
+              ]
+            : [],
       };
     }),
 
@@ -706,10 +852,13 @@ const usersRouter = router({
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
+    me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      (ctx.res as any).clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      (ctx.res as any).clearCookie(COOKIE_NAME, {
+        ...cookieOptions,
+        maxAge: -1,
+      });
       return { success: true } as const;
     }),
     signup: authRouter.signup,
@@ -718,6 +867,7 @@ export const appRouter = router({
   upload: uploadRouter,
   posts: postsRouter,
   likes: likesRouter,
+  bookmarks: bookmarksRouter,
   comments: commentsRouter,
   follows: followsRouter,
   notifications: notificationsRouter,

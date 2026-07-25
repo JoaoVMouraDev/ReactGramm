@@ -13,6 +13,7 @@ import PostDetail from "./pages/PostDetail";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Messages from "./pages/Messages";
+import SavedPosts from "./pages/SavedPosts";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/upload" component={UploadPost} />
       <Route path="/explore" component={Explore} />
       <Route path="/messages" component={Messages} />
+      <Route path="/saved" component={SavedPosts} />
 
       {/* Rotas dinâmicas depois */}
       <Route path="/profile/:username" component={Profile} />
