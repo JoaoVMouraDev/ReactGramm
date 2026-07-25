@@ -77,6 +77,23 @@ export default function UploadPost() {
     e.target.value = "";
   };
 
+  const handleRemoveMedia = (index: number) => {
+    URL.revokeObjectURL(mediaPreviews[index]);
+    setMediaFiles(current =>
+      current.filter((_, itemIndex) => itemIndex !== index)
+    );
+    setMediaPreviews(current =>
+      current.filter((_, itemIndex) => itemIndex !== index)
+    );
+  };
+
+  const handleClearMedia = () => {
+    mediaPreviews.forEach(URL.revokeObjectURL);
+    setMediaPreviews([]);
+    setMediaFiles([]);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
   const handleAddHashtag = () => {
     const tag = hashtagInput.trim().replace(/^#/, "").toLowerCase();
     if (!tag) return;
@@ -178,36 +195,50 @@ export default function UploadPost() {
             </div>
           </button>
         ) : (
-          <div className="relative mb-4 grid grid-cols-3 gap-2 rounded-2xl bg-muted p-2">
-            {mediaPreviews.map((preview, index) => (
-              <img
-                key={preview}
-                src={preview}
-                alt={`Preview ${index + 1}`}
-                className="aspect-square w-full rounded-lg object-cover"
-              />
-            ))}
-            {mediaFiles.length < 10 && (
+          <div className="mb-4 rounded-2xl bg-muted p-2">
+            <div className="mb-2 flex h-8 items-center justify-between px-1">
+              <span className="text-xs text-muted-foreground">
+                {mediaFiles.length}/10 mídias
+              </span>
               <button
                 type="button"
-                onClick={() => fileRef.current?.click()}
-                aria-label="Adicionar mais fotos ou GIFs"
-                className="aspect-square w-full rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                onClick={handleClearMedia}
+                aria-label="Remover todas as mídias"
+                title="Remover todas"
+                className="w-8 h-8 rounded-full text-muted-foreground flex items-center justify-center hover:bg-background hover:text-foreground transition-colors"
               >
-                <Plus size={28} />
+                <X size={18} />
               </button>
-            )}
-            <button
-              onClick={() => {
-                mediaPreviews.forEach(URL.revokeObjectURL);
-                setMediaPreviews([]);
-                setMediaFiles([]);
-                if (fileRef.current) (fileRef.current as any).value = "";
-              }}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
-            >
-              <X size={16} />
-            </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {mediaPreviews.map((preview, index) => (
+                <div key={preview} className="relative">
+                  <img
+                    src={preview}
+                    alt={`Preview ${index + 1}`}
+                    className="aspect-square w-full rounded-lg object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveMedia(index)}
+                    aria-label={`Remover mídia ${index + 1}`}
+                    className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white hover:bg-black/85 transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+              {mediaFiles.length < 10 && (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  aria-label="Adicionar mais fotos ou GIFs"
+                  className="aspect-square w-full rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                >
+                  <Plus size={28} />
+                </button>
+              )}
+            </div>
           </div>
         )}
 
