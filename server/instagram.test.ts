@@ -19,7 +19,10 @@ vi.mock("./db", () => ({
         avatarUrl: null,
         avatarKey: null,
         email: "test@example.com",
+        passwordHash: "sensitive-hash",
         loginMethod: "email",
+        googleId: "google-secret",
+        githubId: "github-secret",
         role: "user",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -159,9 +162,18 @@ describe("auth", () => {
   });
 
   it("me returns user for authenticated user", async () => {
-    const caller = appRouter.createCaller(createAuthCtx());
+    const caller = appRouter.createCaller(
+      createAuthCtx({
+        passwordHash: "sensitive-hash",
+        googleId: "google-secret",
+        githubId: "github-secret",
+      })
+    );
     const result = await caller.auth.me();
     expect(result?.username).toBe("testuser");
+    expect(result).not.toHaveProperty("passwordHash");
+    expect(result).not.toHaveProperty("googleId");
+    expect(result).not.toHaveProperty("githubId");
   });
 
   it("logout clears session cookie", async () => {
@@ -188,6 +200,15 @@ describe("posts", () => {
     expect(result.id).toBe(1);
     expect(Array.isArray(result.hashtags)).toBe(true);
     expect(result.hashtags).toContain("test");
+  });
+
+  it("getById never exposes sensitive author fields", async () => {
+    const caller = appRouter.createCaller(createPublicCtx());
+    const result = await caller.posts.getById({ id: 1 });
+
+    expect(result.user).not.toHaveProperty("passwordHash");
+    expect(result.user).not.toHaveProperty("googleId");
+    expect(result.user).not.toHaveProperty("githubId");
   });
 
   it("getById throws NOT_FOUND for missing post", async () => {

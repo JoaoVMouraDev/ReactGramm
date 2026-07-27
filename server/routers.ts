@@ -50,7 +50,7 @@ import {
   validateEmail,
   validateUsername,
 } from "./auth.ts";
-import { users } from "../drizzle/schema.ts";
+import { users, type User } from "../drizzle/schema.ts";
 import { eq } from "drizzle-orm";
 import {
   getDb,
@@ -65,6 +65,18 @@ import { storagePut } from "./storage.ts";
 // Constantes necessárias para a sessão
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 const COOKIE_NAME = "app_session_id";
+
+function toPublicUser(
+  user: Pick<User, "id" | "username" | "name" | "avatarUrl" | "bio">
+) {
+  return {
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    bio: user.bio,
+  };
+}
 
 // ─── Upload Router ─────────────────────────────────────────────────────────────
 
@@ -127,6 +139,7 @@ const postsRouter = router({
       }
       return feedPosts.map(p => ({
         ...p,
+        user: toPublicUser(p.user),
         hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
         isLiked: likedPostIds.includes(p.id),
         isBookmarked: savedPostIds.includes(p.id),
@@ -203,6 +216,7 @@ const postsRouter = router({
         : [];
       return {
         ...post,
+        user: toPublicUser(post.user),
         hashtags: post.hashtags ? JSON.parse(post.hashtags) : [],
         isLiked: likedPostIds.includes(post.id),
         isBookmarked: savedPostIds.includes(post.id),
@@ -258,6 +272,7 @@ const postsRouter = router({
       );
       return tagPosts.map(p => ({
         ...p,
+        user: toPublicUser(p.user),
         hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
       }));
     }),
@@ -281,7 +296,7 @@ const likesRouter = router({
   usersByPost: publicProcedure
     .input(z.object({ postId: z.number() }))
     .query(async ({ input }) => {
-      return getUsersWhoLikedPost(input.postId);
+      return (await getUsersWhoLikedPost(input.postId)).map(toPublicUser);
     }),
 });
 
@@ -315,7 +330,11 @@ const commentsRouter = router({
       })
     )
     .query(async ({ input, ctx }) => {
-      return getCommentsByPost(input.postId, ctx.user?.id);
+      const postComments = await getCommentsByPost(input.postId, ctx.user?.id);
+      return postComments.map(comment => ({
+        ...comment,
+        user: toPublicUser(comment.user),
+      }));
     }),
 
   toggleLike: protectedProcedure
@@ -539,6 +558,7 @@ const bookmarksRouter = router({
     );
     return saved.map(post => ({
       ...post,
+      user: toPublicUser(post.user),
       hashtags: post.hashtags ? JSON.parse(post.hashtags) : [],
       isLiked: likedPostIds.includes(post.id),
       isBookmarked: true,
@@ -852,7 +872,18 @@ const usersRouter = router({
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(({ ctx }) => {
+      if (!ctx.user) return null;
+      return {
+        id: ctx.user.id,
+        username: ctx.user.username,
+        name: ctx.user.name,
+        email: ctx.user.email,
+        avatarUrl: ctx.user.avatarUrl,
+        bio: ctx.user.bio,
+        role: ctx.user.role,
+      };
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       (ctx.res as any).clearCookie(COOKIE_NAME, {

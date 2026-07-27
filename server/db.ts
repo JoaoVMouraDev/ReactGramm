@@ -276,6 +276,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
 
 // ─── Shared Selects ──────────────────────────────────────────────────────────
 
+// Internal-only user record. Never embed this selector in API-facing relations.
 const USER_SELECT = {
   id: users.id,
   openId: users.openId,
@@ -294,6 +295,19 @@ const USER_SELECT = {
   createdAt: users.createdAt,
   updatedAt: users.updatedAt,
   lastSignedIn: users.lastSignedIn,
+};
+
+export type PublicUser = Pick<
+  User,
+  "id" | "username" | "name" | "avatarUrl" | "bio"
+>;
+
+export const PUBLIC_USER_SELECT = {
+  id: users.id,
+  username: users.username,
+  name: users.name,
+  avatarUrl: users.avatarUrl,
+  bio: users.bio,
 };
 
 function shouldBeAdmin(
@@ -654,10 +668,13 @@ export async function deletePost(
     );
 }
 
-export async function getPostById(
-  postId: number
-): Promise<
-  (Post & { user: User; likesCount: number; commentsCount: number }) | undefined
+export async function getPostById(postId: number): Promise<
+  | (Post & {
+      user: PublicUser;
+      likesCount: number;
+      commentsCount: number;
+    })
+  | undefined
 > {
   const db = await getDb();
   if (!db) return undefined;
@@ -674,7 +691,7 @@ export async function getPostById(
       commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
       updatedAt: posts.updatedAt,
-      user: USER_SELECT,
+      user: PUBLIC_USER_SELECT,
     })
     .from(posts)
     .innerJoin(users, eq(posts.userId, users.id))
@@ -686,7 +703,7 @@ export async function getPostById(
 export async function getFeedPosts(
   limit: number,
   offset: number
-): Promise<(Post & { user: User })[]> {
+): Promise<(Post & { user: PublicUser })[]> {
   const db = await getDb();
   if (!db) return [];
   const result = await db
@@ -702,7 +719,7 @@ export async function getFeedPosts(
       commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
       updatedAt: posts.updatedAt,
-      user: USER_SELECT,
+      user: PUBLIC_USER_SELECT,
     })
     .from(posts)
     .innerJoin(users, eq(posts.userId, users.id))
@@ -777,7 +794,7 @@ export async function getPostsByHashtag(
   hashtag: string,
   limit: number,
   offset: number
-): Promise<(Post & { user: User })[]> {
+): Promise<(Post & { user: PublicUser })[]> {
   const db = await getDb();
   if (!db) return [];
   const result = await db
@@ -793,7 +810,7 @@ export async function getPostsByHashtag(
       commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
       updatedAt: posts.updatedAt,
-      user: USER_SELECT,
+      user: PUBLIC_USER_SELECT,
     })
     .from(posts)
     .innerJoin(users, eq(posts.userId, users.id))
@@ -836,33 +853,15 @@ export async function getLikesByPost(postId: number): Promise<Like[]> {
 
 export async function getUsersWhoLikedPost(
   postId: number
-): Promise<Array<User>> {
+): Promise<PublicUser[]> {
   const db = await getDb();
   if (!db) return [];
   return db
-    .select({
-      id: users.id,
-      openId: users.openId,
-      name: users.name,
-      email: users.email,
-      passwordHash: users.passwordHash,
-      loginMethod: users.loginMethod,
-      googleId: users.googleId,
-      githubId: users.githubId,
-      role: users.role,
-      username: users.username,
-      bio: users.bio,
-      avatarUrl: users.avatarUrl,
-      avatarKey: users.avatarKey,
-      emailVerified: users.emailVerified,
-      createdAt: users.createdAt,
-      updatedAt: users.updatedAt,
-      lastSignedIn: users.lastSignedIn,
-    })
+    .select(PUBLIC_USER_SELECT)
     .from(likes)
     .innerJoin(users, eq(likes.userId, users.id))
     .where(eq(likes.postId, postId))
-    .orderBy(desc(likes.createdAt)) as Promise<Array<User>>;
+    .orderBy(desc(likes.createdAt));
 }
 
 export async function getUserLikedPostIds(
@@ -907,7 +906,13 @@ export async function createComment(data: InsertComment): Promise<number> {
 export async function getCommentsByPost(
   postId: number,
   currentUserId?: number
-): Promise<(Comment & { user: User; likesCount: number; isLiked: boolean })[]> {
+): Promise<
+  (Comment & {
+    user: PublicUser;
+    likesCount: number;
+    isLiked: boolean;
+  })[]
+> {
   const db = await getDb();
   if (!db) return [];
   const result = await db
@@ -922,14 +927,14 @@ export async function getCommentsByPost(
       isLiked: currentUserId
         ? sql<boolean>`EXISTS(SELECT 1 FROM ${commentLikes} WHERE ${commentLikes.commentId} = ${comments.id} AND ${commentLikes.userId} = ${currentUserId})`
         : sql<boolean>`false`,
-      user: USER_SELECT,
+      user: PUBLIC_USER_SELECT,
     })
     .from(comments)
     .innerJoin(users, eq(comments.userId, users.id))
     .where(eq(comments.postId, postId))
     .orderBy(comments.createdAt);
   return result as (Comment & {
-    user: User;
+    user: PublicUser;
     likesCount: number;
     isLiked: boolean;
   })[];
@@ -993,7 +998,7 @@ export async function getSavedPosts(userId: number) {
       createdAt: posts.createdAt,
       updatedAt: posts.updatedAt,
       savedAt: savedPosts.createdAt,
-      user: USER_SELECT,
+      user: PUBLIC_USER_SELECT,
     })
     .from(savedPosts)
     .innerJoin(posts, eq(savedPosts.postId, posts.id))
@@ -1375,16 +1380,16 @@ export async function getFollowersCount(userId: number): Promise<number> {
   return Number(result[0]?.count ?? 0);
 }
 
-export async function getFollowers(userId: number): Promise<User[]> {
+export async function getFollowers(userId: number): Promise<PublicUser[]> {
   const db = await getDb();
   if (!db) return [];
   const result = await db
-    .select({ user: USER_SELECT })
+    .select({ user: PUBLIC_USER_SELECT })
     .from(follows)
     .innerJoin(users, eq(follows.followerId, users.id))
     .where(eq(follows.followingId, userId))
     .orderBy(desc(follows.createdAt));
-  return result.map(row => row.user as User);
+  return result.map(row => row.user);
 }
 
 export async function getFollowingCount(userId: number): Promise<number> {
@@ -1397,16 +1402,16 @@ export async function getFollowingCount(userId: number): Promise<number> {
   return Number(result[0]?.count ?? 0);
 }
 
-export async function getFollowing(userId: number): Promise<User[]> {
+export async function getFollowing(userId: number): Promise<PublicUser[]> {
   const db = await getDb();
   if (!db) return [];
   const result = await db
-    .select({ user: USER_SELECT })
+    .select({ user: PUBLIC_USER_SELECT })
     .from(follows)
     .innerJoin(users, eq(follows.followingId, users.id))
     .where(eq(follows.followerId, userId))
     .orderBy(desc(follows.createdAt));
-  return result.map(row => row.user as User);
+  return result.map(row => row.user);
 }
 
 export async function isFollowing(
