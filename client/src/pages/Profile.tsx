@@ -5,6 +5,7 @@ import {
   Camera,
   Grid3X3,
   Loader2,
+  Pin,
   Mail,
   Settings,
   UserCheck,
@@ -280,6 +281,11 @@ export default function Profile() {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 />
+                {post.isPinned ? (
+                  <span className="absolute top-1.5 right-1.5 rounded-full bg-black/65 p-1 text-white shadow-sm">
+                    <Pin size={12} fill="currentColor" />
+                  </span>
+                ) : null}
                 <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/75 to-transparent px-2 pb-2 pt-8">
                   <div className="flex gap-3 text-sm font-semibold text-white">
                     <span>❤️ {post.likesCount}</span>

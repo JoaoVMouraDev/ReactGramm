@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -26,8 +28,23 @@ import {
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import {
+  assertCanTogglePin,
+  nextPinState,
+} from "./pinPost";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+
+async function createLocalPgliteDb() {
+  const { PGlite } = await import("@electric-sql/pglite");
+  const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
+  const dataDir = path.resolve(process.cwd(), ".data", "pglite");
+  fs.mkdirSync(dataDir, { recursive: true });
+  const client = new PGlite(dataDir);
+  await client.waitReady;
+  console.log(`[Database] Using local PGlite at ${dataDir}`);
+  return drizzlePglite(client) as unknown as ReturnType<typeof drizzle>;
+}
 
 function getDatabaseUrl() {
   const connectionString = process.env.DATABASE_URL;
@@ -51,6 +68,15 @@ export async function getDb() {
   if (!_db) {
     const connectionString = getDatabaseUrl();
     if (!connectionString) {
+      if (process.env.NODE_ENV === "development" && !process.env.VERCEL) {
+        try {
+          _db = await createLocalPgliteDb();
+          return _db;
+        } catch (error) {
+          console.error("[Database] Failed to start local PGlite:", error);
+          return null;
+        }
+      }
       console.error("[Database] DATABASE_URL is not defined in .env file");
       return null;
     }
@@ -124,6 +150,8 @@ export async function ensureDatabaseSchema(): Promise<void> {
       "imageKey" text NOT NULL,
       caption text,
       hashtags text,
+      "isPinned" boolean NOT NULL DEFAULT false,
+      "pinnedAt" timestamp,
       "createdAt" timestamp NOT NULL DEFAULT now(),
       "updatedAt" timestamp NOT NULL DEFAULT now()
     );
@@ -209,7 +237,24 @@ export async function ensureDatabaseSchema(): Promise<void> {
   `);
 
   await db.execute(
+    sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "isPinned" boolean NOT NULL DEFAULT false;`
+  );
+  await db.execute(
+    sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS "pinnedAt" timestamp;`
+  );
+  await db.execute(sql`
+    UPDATE posts
+    SET "isPinned" = true
+    WHERE "pinnedAt" IS NOT NULL AND "isPinned" = false;
+  `);
+  await db.execute(
     sql`CREATE INDEX IF NOT EXISTS "posts_userId_idx" ON posts ("userId");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "posts_userId_isPinned_idx" ON posts ("userId", "isPinned");`
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS "posts_userId_pinnedAt_idx" ON posts ("userId", "pinnedAt");`
   );
   await db.execute(
     sql`CREATE UNIQUE INDEX IF NOT EXISTS "post_media_postId_position_unique" ON post_media ("postId", position);`
@@ -637,6 +682,55 @@ export async function createPost(
   });
 }
 
+export async function togglePinPost(
+  postId: number,
+  userId: number
+): Promise<{ pinned: boolean }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+
+  const [post] = await db
+    .select({
+      id: posts.id,
+      userId: posts.userId,
+      isPinned: posts.isPinned,
+      pinnedAt: posts.pinnedAt,
+      createdAt: posts.createdAt,
+    })
+    .from(posts)
+    .where(eq(posts.id, postId))
+    .limit(1);
+
+  const owned = assertCanTogglePin(post, userId);
+
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(posts)
+    .where(and(eq(posts.userId, userId), eq(posts.isPinned, true)));
+
+  const next = nextPinState(owned, Number(countRow?.count ?? 0));
+
+  await db
+    .update(posts)
+    .set({
+      isPinned: next.isPinned,
+      pinnedAt: next.pinnedAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(posts.id, postId));
+  return { pinned: next.isPinned };
+}
+
+export async function getPinnedPostsCount(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(posts)
+    .where(and(eq(posts.userId, userId), eq(posts.isPinned, true)));
+  return Number(countRow?.count ?? 0);
+}
+
 export async function updatePost(
   postId: number,
   userId: number,
@@ -687,6 +781,8 @@ export async function getPostById(postId: number): Promise<
       media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
+      isPinned: posts.isPinned,
+      pinnedAt: posts.pinnedAt,
       likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
       commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
@@ -715,6 +811,8 @@ export async function getFeedPosts(
       media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
+      isPinned: posts.isPinned,
+      pinnedAt: posts.pinnedAt,
       likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
       commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
@@ -745,12 +843,18 @@ export async function getUserPosts(
       media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
+      isPinned: posts.isPinned,
+      pinnedAt: posts.pinnedAt,
       createdAt: posts.createdAt,
       updatedAt: posts.updatedAt,
     })
     .from(posts)
     .where(eq(posts.userId, userId))
-    .orderBy(desc(posts.createdAt))
+    .orderBy(
+      desc(posts.isPinned),
+      sql`${posts.pinnedAt} DESC NULLS LAST`,
+      desc(posts.createdAt)
+    )
     .limit(limit)
     .offset(offset);
 
@@ -806,6 +910,8 @@ export async function getPostsByHashtag(
       media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
+      isPinned: posts.isPinned,
+      pinnedAt: posts.pinnedAt,
       likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
       commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,
@@ -993,6 +1099,8 @@ export async function getSavedPosts(userId: number) {
       media: POST_MEDIA_SELECT,
       caption: posts.caption,
       hashtags: posts.hashtags,
+      isPinned: posts.isPinned,
+      pinnedAt: posts.pinnedAt,
       likesCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${likes} WHERE ${likes.postId} = ${posts.id}), 0) AS INTEGER)`,
       commentsCount: sql<number>`CAST(COALESCE((SELECT count(*) FROM ${comments} WHERE ${comments.postId} = ${posts.id}), 0) AS INTEGER)`,
       createdAt: posts.createdAt,

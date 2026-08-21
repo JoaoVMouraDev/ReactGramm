@@ -8,6 +8,8 @@ import {
   MessageCircle,
   MoreHorizontal,
   Pencil,
+  Pin,
+  PinOff,
   Send,
   Trash2,
 } from "lucide-react";
@@ -22,6 +24,7 @@ import { ImageLightbox } from "./ImageLightbox";
 import { MentionText } from "./MentionText";
 import { SharePostDialog } from "./SharePostDialog";
 import { PostCarousel, type PostMedia } from "./PostCarousel";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface PostCardProps {
   post: {
@@ -35,6 +38,7 @@ interface PostCardProps {
     commentsCount: number;
     isLiked?: boolean;
     isBookmarked?: boolean;
+    isPinned?: boolean;
     createdAt: Date;
     user?: {
       id: number;
@@ -61,6 +65,7 @@ export function PostCard({
   const [isLiked, setIsLiked] = useState(post.isLiked ?? false);
   const [likesCount, setLikesCount] = useState(post.likesCount);
   const [isBookmarked, setIsBookmarked] = useState(post.isBookmarked ?? false);
+  const [isPinned, setIsPinned] = useState(post.isPinned ?? false);
   const [commentsCount, setCommentsCount] = useState(post.commentsCount);
   const [showMenu, setShowMenu] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -76,6 +81,11 @@ export function PostCard({
   const menuRef = useRef<HTMLDivElement>(null);
   const isOwner = user?.id === post.userId;
   const canDeletePost = isOwner || user?.role === "admin";
+  const { data: pinnedSummary } = trpc.posts.pinnedCount.useQuery(undefined, {
+    enabled: isOwner,
+  });
+  const pinnedCount = pinnedSummary?.count ?? 0;
+  const isPinLimitReached = isOwner && !isPinned && pinnedCount >= 3;
 
   const utils = trpc.useUtils();
 
@@ -142,6 +152,18 @@ export function PostCard({
     onError: () => toast.error("Não foi possível atualizar os salvos"),
   });
 
+  const togglePinMutation = trpc.posts.togglePin.useMutation({
+    onSuccess: ({ pinned }) => {
+      setIsPinned(pinned);
+      toast.success(pinned ? "Post fixado no perfil" : "Post desafixado");
+      utils.posts.byUser.invalidate({ userId: post.userId });
+      utils.posts.getById.invalidate({ id: post.id });
+      utils.posts.feed.invalidate();
+      onUpdated?.();
+    },
+    onError: err => toast.error(err.message || "Não foi possível fixar o post"),
+  });
+
   const deletePostMutation = trpc.posts.delete.useMutation({
     onSuccess: () => {
       toast.success("Post deletado");
@@ -189,6 +211,10 @@ export function PostCard({
     setIsBookmarked(post.isBookmarked ?? false);
   }, [post.isBookmarked]);
 
+  useEffect(() => {
+    setIsPinned(post.isPinned ?? false);
+  }, [post.isPinned]);
+
   const handleLike = () => {
     if (!user) {
       toast.error("Faça login para curtir posts");
@@ -210,6 +236,19 @@ export function PostCard({
   const handleDoubleClick = () => {
     if (!user || isLiked) return;
     handleLike();
+  };
+
+  const handleTogglePin = () => {
+    if (togglePinMutation.isPending) return;
+    if (isPinLimitReached && !isPinned) {
+      toast.info(
+        "Você já atingiu o limite de posts fixados. Desafixe um post antes de fixar outro."
+      );
+      setShowMenu(false);
+      return;
+    }
+    togglePinMutation.mutate({ postId: post.id });
+    setShowMenu(false);
   };
 
   const handleDelete = () => {
@@ -292,16 +331,23 @@ export function PostCard({
           </UserHoverCard>
 
           <div className="flex-1 min-w-0">
-            <UserHoverCard username={post.user?.username ?? ""}>
-              <button
-                onClick={() =>
-                  navigate(`/profile/${post.user?.username ?? post.userId}`)
-                }
-                className="font-semibold text-sm hover:underline text-left"
-              >
-                {username}
-              </button>
-            </UserHoverCard>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <UserHoverCard username={post.user?.username ?? ""}>
+                <button
+                  onClick={() =>
+                    navigate(`/profile/${post.user?.username ?? post.userId}`)
+                  }
+                  className="font-semibold text-sm hover:underline text-left truncate"
+                >
+                  {username}
+                </button>
+              </UserHoverCard>
+              {isPinned ? (
+                <span className="shrink-0 text-muted-foreground" title="Post fixado">
+                  <Pin size={12} fill="currentColor" />
+                </span>
+              ) : null}
+            </div>
             <p className="text-xs text-muted-foreground">
               {new Date(post.createdAt).toLocaleDateString("pt-BR", {
                 day: "numeric",
@@ -330,16 +376,38 @@ export function PostCard({
                   </button>
                 )}
                 {isOwner && (
-                  <button
-                    onClick={() => {
-                      setShowMenu(false);
-                      setShowEditModal(true);
-                    }}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted text-sm text-left transition-colors border-b border-border"
-                  >
-                    <Pencil size={15} />
-                    Editar post
-                  </button>
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <button
+                            onClick={handleTogglePin}
+                            disabled={togglePinMutation.isPending || isPinLimitReached}
+                            className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted text-sm text-left transition-colors border-b border-border disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isPinned ? <PinOff size={15} /> : <Pin size={15} />}
+                            {isPinned ? "Desafixar post" : "Fixar post"}
+                          </button>
+                        </span>
+                      </TooltipTrigger>
+                      {isPinLimitReached && !isPinned ? (
+                        <TooltipContent side="left">
+                          Você já atingiu o limite de posts fixados. Desafixe um post
+                          antes de fixar outro.
+                        </TooltipContent>
+                      ) : null}
+                    </Tooltip>
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowEditModal(true);
+                      }}
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted text-sm text-left transition-colors border-b border-border"
+                    >
+                      <Pencil size={15} />
+                      Editar post
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={handleCopyLink}

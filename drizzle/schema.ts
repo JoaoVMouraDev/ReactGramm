@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   pgEnum,
@@ -46,10 +47,16 @@ export const posts = pgTable(
     imageKey: text("imageKey").notNull(),
     caption: text("caption"),
     hashtags: text("hashtags"), // JSON array stored as string
+    isPinned: boolean("isPinned").default(false).notNull(),
+    pinnedAt: timestamp("pinnedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },
-  table => [index("posts_userId_idx").on(table.userId)]
+  table => [
+    index("posts_userId_idx").on(table.userId),
+    index("posts_userId_isPinned_idx").on(table.userId, table.isPinned),
+    index("posts_userId_pinnedAt_idx").on(table.userId, table.pinnedAt),
+  ]
 );
 
 export type Post = typeof posts.$inferSelect;

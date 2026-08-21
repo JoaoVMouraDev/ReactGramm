@@ -20,12 +20,14 @@ import {
   getUserSavedPostIds,
   getUserPosts,
   getSavedPosts,
+  getPinnedPostsCount,
   isFollowing,
   searchUsers,
   toggleCommentLike,
   toggleFollow,
   toggleLike,
   toggleSavedPost,
+  togglePinPost,
   updatePost,
   updateUserProfile,
   getCommentsByPost,
@@ -52,6 +54,7 @@ import {
 } from "./auth.ts";
 import { users, type User } from "../drizzle/schema.ts";
 import { eq } from "drizzle-orm";
+import { MAX_PINNED_POSTS, PIN_LIMIT_MESSAGE } from "./pinPost";
 import {
   getDb,
   getUserByEmail,
@@ -75,6 +78,13 @@ function toPublicUser(
     name: user.name,
     avatarUrl: user.avatarUrl,
     bio: user.bio,
+  };
+}
+
+function withPinFlag<T extends { pinnedAt?: Date | string | null }>(post: T) {
+  return {
+    ...post,
+    isPinned: Boolean(post.pinnedAt),
   };
 }
 
@@ -137,13 +147,15 @@ const postsRouter = router({
           getUserSavedPostIds(ctx.user.id, ids),
         ]);
       }
-      return feedPosts.map(p => ({
-        ...p,
-        user: toPublicUser(p.user),
-        hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
-        isLiked: likedPostIds.includes(p.id),
-        isBookmarked: savedPostIds.includes(p.id),
-      }));
+      return feedPosts.map(p =>
+        withPinFlag({
+          ...p,
+          user: toPublicUser(p.user),
+          hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
+          isLiked: likedPostIds.includes(p.id),
+          isBookmarked: savedPostIds.includes(p.id),
+        })
+      );
     }),
 
   create: protectedProcedure
@@ -214,13 +226,48 @@ const postsRouter = router({
       const savedPostIds = ctx.user
         ? await getUserSavedPostIds(ctx.user.id, [post.id])
         : [];
-      return {
+      return withPinFlag({
         ...post,
         user: toPublicUser(post.user),
         hashtags: post.hashtags ? JSON.parse(post.hashtags) : [],
         isLiked: likedPostIds.includes(post.id),
         isBookmarked: savedPostIds.includes(post.id),
-      };
+      });
+    }),
+
+  pinnedCount: protectedProcedure.query(async ({ ctx }) => {
+    return {
+      count: await getPinnedPostsCount(ctx.user.id),
+      max: MAX_PINNED_POSTS,
+    };
+  }),
+
+  togglePin: protectedProcedure
+    .input(z.object({ postId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        return await togglePinPost(input.postId, ctx.user.id);
+      } catch (error) {
+        if (error instanceof Error && error.message === "POST_NOT_FOUND") {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Post não encontrado",
+          });
+        }
+        if (error instanceof Error && error.message === "FORBIDDEN") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Você só pode fixar os seus próprios posts.",
+          });
+        }
+        if (error instanceof Error && error.message === "PIN_LIMIT") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: PIN_LIMIT_MESSAGE,
+          });
+        }
+        throw error;
+      }
     }),
 
   delete: protectedProcedure
@@ -249,11 +296,13 @@ const postsRouter = router({
         const ids = userPosts.map(p => p.id);
         likedPostIds = await getUserLikedPostIds(ctx.user.id, ids);
       }
-      return userPosts.map(p => ({
-        ...p,
-        hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
-        isLiked: likedPostIds.includes(p.id),
-      }));
+      return userPosts.map(p =>
+        withPinFlag({
+          ...p,
+          hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
+          isLiked: likedPostIds.includes(p.id),
+        })
+      );
     }),
 
   byHashtag: publicProcedure
@@ -270,11 +319,13 @@ const postsRouter = router({
         input.limit,
         input.offset
       );
-      return tagPosts.map(p => ({
-        ...p,
-        user: toPublicUser(p.user),
-        hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
-      }));
+      return tagPosts.map(p =>
+        withPinFlag({
+          ...p,
+          user: toPublicUser(p.user),
+          hashtags: p.hashtags ? JSON.parse(p.hashtags) : [],
+        })
+      );
     }),
 });
 
@@ -556,13 +607,15 @@ const bookmarksRouter = router({
       ctx.user.id,
       saved.map(post => post.id)
     );
-    return saved.map(post => ({
-      ...post,
-      user: toPublicUser(post.user),
-      hashtags: post.hashtags ? JSON.parse(post.hashtags) : [],
-      isLiked: likedPostIds.includes(post.id),
-      isBookmarked: true,
-    }));
+    return saved.map(post =>
+      withPinFlag({
+        ...post,
+        user: toPublicUser(post.user),
+        hashtags: post.hashtags ? JSON.parse(post.hashtags) : [],
+        isLiked: likedPostIds.includes(post.id),
+        isBookmarked: true,
+      })
+    );
   }),
 
   toggle: protectedProcedure

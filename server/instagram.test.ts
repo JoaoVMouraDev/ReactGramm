@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import * as db from "./db";
 import { appRouter } from "./routers";
+import { orderProfilePosts } from "./pinPost";
 import type { TrpcContext } from "./_core/context";
 
 // ─── Mock DB helpers ──────────────────────────────────────────────────────────
@@ -55,6 +57,7 @@ vi.mock("./db", () => ({
     return [];
   }),
   createPost: vi.fn(async () => 42),
+  togglePinPost: vi.fn(async () => ({ pinned: true })),
   updatePost: vi.fn(async () => true),
   deletePost: vi.fn(async () => {}),
   getPostById: vi.fn(async (id: number) => {
@@ -257,6 +260,60 @@ describe("posts", () => {
       hashtags: ["teste"],
     });
     expect(result.success).toBe(true);
+  });
+
+  it("toggle pin requires authentication", async () => {
+    const caller = appRouter.createCaller(createPublicCtx());
+    await expect(caller.posts.togglePin({ postId: 1 })).rejects.toThrow();
+  });
+
+  it("toggle pin succeeds for authenticated user", async () => {
+    const caller = appRouter.createCaller(createAuthCtx());
+    const result = await caller.posts.togglePin({ postId: 1 });
+    expect(result.pinned).toBe(true);
+  });
+
+  it("user can pin and unpin their own post", async () => {
+    const caller = appRouter.createCaller(createAuthCtx());
+    vi.mocked(db.togglePinPost)
+      .mockResolvedValueOnce({ pinned: true })
+      .mockResolvedValueOnce({ pinned: false });
+
+    await expect(caller.posts.togglePin({ postId: 11 })).resolves.toEqual({
+      pinned: true,
+    });
+    await expect(caller.posts.togglePin({ postId: 11 })).resolves.toEqual({
+      pinned: false,
+    });
+  });
+
+  it("user cannot pin another person's post", async () => {
+    const caller = appRouter.createCaller(createAuthCtx({ id: 2 }));
+    vi.mocked(db.togglePinPost).mockRejectedValueOnce(new Error("FORBIDDEN"));
+
+    await expect(caller.posts.togglePin({ postId: 99 })).rejects.toThrow(
+      "Você só pode fixar os seus próprios posts."
+    );
+  });
+
+  it("reaches the pin limit with clear error for a fourth post", async () => {
+    const caller = appRouter.createCaller(createAuthCtx());
+    vi.mocked(db.togglePinPost).mockRejectedValueOnce(new Error("PIN_LIMIT"));
+
+    await expect(caller.posts.togglePin({ postId: 4 })).rejects.toThrow(
+      "Você já atingiu o limite de posts fixados. Desafixe um post antes de fixar outro."
+    );
+  });
+
+  it("orders pinned posts before regular posts on profile", () => {
+    const posts = [
+      { id: 1, isPinned: false, pinnedAt: null, createdAt: new Date("2024-01-01T00:00:00.000Z") },
+      { id: 2, isPinned: true, pinnedAt: new Date("2024-01-08T00:00:00.000Z"), createdAt: new Date("2024-01-02T00:00:00.000Z") },
+      { id: 3, isPinned: true, pinnedAt: new Date("2024-01-09T00:00:00.000Z"), createdAt: new Date("2024-01-03T00:00:00.000Z") },
+      { id: 4, isPinned: false, pinnedAt: null, createdAt: new Date("2024-01-04T00:00:00.000Z") },
+    ] as const;
+
+    expect(orderProfilePosts(posts as any).map(post => post.id)).toEqual([3, 2, 4, 1]);
   });
 });
 
