@@ -8,10 +8,11 @@ import { ENV } from "./env";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 
-ensureDatabaseSchema()
+const schemaReady = ensureDatabaseSchema()
   .then(() => seedLocalDevIfEmpty())
   .catch((error) => {
     console.error("[Database] Schema initialization failed:", error);
+    throw error;
   });
 
 export function createApp() {
@@ -39,6 +40,14 @@ export function createApp() {
 
   app.use(
     "/api/trpc",
+    async (_req, _res, next) => {
+      try {
+        await schemaReady;
+        next();
+      } catch (error) {
+        next(error);
+      }
+    },
     createExpressMiddleware({
       router: appRouter,
       createContext,

@@ -104,10 +104,6 @@ export async function getDb() {
 }
 
 export async function ensureDatabaseSchema(): Promise<void> {
-  if (process.env.VERCEL) {
-    return;
-  }
-
   const db = await getDb();
   if (!db) return;
 
