@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { Navbar } from "@/components/Navbar";
 import { PostCard } from "@/components/PostCard";
@@ -12,24 +12,8 @@ import { PageTransition } from "@/components/PageTransition";
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
-  const [offset, setOffset] = useState(0);
-  const [inView, setInView] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
-  // Hook para observar o scroll e disparar o carregamento automático
   const LIMIT = 10;
-
-  // Setup intersection observer
-  useEffect(() => {
-    const observer = new (globalThis as any).IntersectionObserver(
-      ([entry]: any) => setInView(entry.isIntersecting),
-      { threshold: 0.1 }
-    );
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-    return () => observer.disconnect();
-  }, []);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -42,32 +26,14 @@ export default function Home() {
   }, [isAuthenticated, loading, navigate]);
 
   const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
+    data: posts = [],
     isLoading,
+    isError,
     refetch,
-  // @ts-ignore - Caso o backend ainda retorne um array simples em vez de objeto com cursor
-  } = trpc.posts.feed.useInfiniteQuery(
-    { limit: LIMIT }, // O offset/cursor será gerenciado pelo getNextPageParam
-    {
-      queryKey: ["posts.feed", { limit: LIMIT }], // Chave de query estável
-      getNextPageParam: (lastPage: any) => lastPage.nextCursor ?? undefined,
-      refetchOnWindowFocus: false,
-    }
+  } = trpc.posts.feed.useQuery(
+    { limit: LIMIT, offset: 0 },
+    { refetchOnWindowFocus: false }
   );
-
-  // Efeito para carregar mais posts quando o elemento "sentinela" entra na visualização
-  useEffect(() => {
-    if (inView && hasNextPage) {
-      fetchNextPage();
-    }
-  }, [inView, hasNextPage, fetchNextPage]);
-
-  // Achata as páginas em um único array de posts para renderização
-  // Ajustado para lidar com retorno que pode ser array direto ou objeto .posts
-  const posts = data?.pages.flatMap((page: any) => Array.isArray(page) ? page : page.posts) || [];
 
   if (loading || !isAuthenticated) {
     return (
@@ -89,7 +55,22 @@ export default function Home() {
             <Loader2 className="animate-spin text-primary" size={32} />
             <p className="text-sm text-muted-foreground">Carregando feed...</p>
           </div>
-        ) : !posts || posts.length === 0 ? (
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4 px-4 text-center">
+            <p className="font-semibold text-lg">Não foi possível carregar o feed</p>
+            <p className="text-sm text-muted-foreground">
+              Tente novamente em alguns instantes.
+            </p>
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+              className="gap-2"
+            >
+              <RefreshCw size={16} />
+              Tentar novamente
+            </Button>
+          </div>
+        ) : posts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4 px-4">
             <div className="w-20 h-20 rounded-full ig-gradient flex items-center justify-center">
               <span className="text-3xl">📸</span>
@@ -121,16 +102,8 @@ export default function Home() {
                 onUpdated={() => refetch()}
               />
             ))}
-
-            {/* Sentinela: Quando este elemento entra na tela, o fetchNextPage é disparado */}
-            <div ref={ref} className="flex justify-center py-8">
-              {isFetchingNextPage ? (
-                <Loader2 className="animate-spin text-primary" size={24} />
-              ) : hasNextPage ? (
-                <span className="text-xs text-muted-foreground italic">Carregando mais...</span>
-              ) : (
-                <span className="text-xs text-muted-foreground italic">Você chegou ao fim do feed ✨</span>
-              )}
+            <div className="flex justify-center py-8">
+              <span className="text-xs text-muted-foreground italic">Você chegou ao fim do feed</span>
             </div>
           </div>
         )}
