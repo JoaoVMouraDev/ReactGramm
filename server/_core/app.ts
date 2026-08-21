@@ -1,15 +1,18 @@
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import express from "express";
 import { ensureDatabaseSchema } from "../db";
+import { seedLocalDevIfEmpty } from "../seedLocal";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { ENV } from "./env";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 
-ensureDatabaseSchema().catch((error) => {
-  console.error("[Database] Schema initialization failed:", error);
-});
+ensureDatabaseSchema()
+  .then(() => seedLocalDevIfEmpty())
+  .catch((error) => {
+    console.error("[Database] Schema initialization failed:", error);
+  });
 
 export function createApp() {
   const app = express();
